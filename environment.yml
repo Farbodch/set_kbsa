@@ -7,6 +7,8 @@ dependencies:
   - scipy=1.14.1
   - matplotlib=3.9.2
   - python-dateutil=2.9.0
+  - mpi4py
+  - sympy
 
   - pip
   - pip:

@@ -4,3 +4,4 @@ fig
 .ipynb_checkpoints/
 kbsa/__pycache__/
 utils/__pycache__/
+slurm_out

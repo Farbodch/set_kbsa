@@ -262,7 +262,7 @@ class model:
             self.num_steps = num_steps_cdr
             self.dt = self.t_end/self.num_steps
 
-            self.P3 = FiniteElement("CG", triangle, 3)
+            self.P3 = FiniteElement("CG", triangle, 1)
             self.elements = MixedElement([self.P3, self.P3, self.P3, self.P3])
             self.V = FunctionSpace(self.dolf_mesh, self.elements)
             self.u = Function(self.V)
@@ -379,10 +379,10 @@ class model:
         #     print('temp good')
 
         if path.exists(file_name_fuel) and path.exists(file_name_oxygen) and path.exists(file_name_product) and path.exists(file_name_temp):
-            V_1 = FunctionSpace(self.dolf_mesh, 'CG', 3)
-            V_2 = FunctionSpace(self.dolf_mesh, 'CG', 3)
-            V_3 = FunctionSpace(self.dolf_mesh, 'CG', 3)
-            V_4 = FunctionSpace(self.dolf_mesh, 'CG', 3)
+            V_1 = FunctionSpace(self.dolf_mesh, 'CG', 1)
+            V_2 = FunctionSpace(self.dolf_mesh, 'CG', 1)
+            V_3 = FunctionSpace(self.dolf_mesh, 'CG', 1)
+            V_4 = FunctionSpace(self.dolf_mesh, 'CG', 1)
             self.fuel_field_t_now = Function(V_1)
             self.oxyxen_field_t_now = Function(V_2)
             self.product_field_t_now = Function(V_3)
@@ -569,7 +569,7 @@ class model:
         self.temp_field_t_now = u4
 
         if get_interpolated:
-            V_scalar = FunctionSpace(self.dolf_mesh, 'CG', 3)
+            V_scalar = FunctionSpace(self.dolf_mesh, 'CG', 1)
             fuel_interpolated = interpolate(u1, V_scalar)
             oxygen_interpolated = interpolate(u2, V_scalar)
             product_interpolated = interpolate(u3, V_scalar)
