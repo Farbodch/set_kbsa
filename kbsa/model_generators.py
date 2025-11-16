@@ -64,10 +64,16 @@ def get_CDR(params):
                         num_steps_cdr=params['num_steps'])
         model.get_cdr(coefficients=u, reset=True)
 
-        fuel_bool = project(conditional(le(model.fuel_field_t_now,params['g_ineq_c']['fuel']), Constant(1), Constant(0)), FunctionSpace(model.dolf_mesh, 'CG', 1))
-        oxygen_bool = project(conditional(le(model.oxyxen_field_t_now,params['g_ineq_c']['oxygen']), Constant(1), Constant(0)), FunctionSpace(model.dolf_mesh, 'CG', 1))
-        product_bool = project(conditional(le(model.product_field_t_now,params['g_ineq_c']['product']), Constant(1), Constant(0)), FunctionSpace(model.dolf_mesh, 'CG', 1))
-        temp_bool = project(conditional(le(model.temp_field_t_now,params['g_ineq_c']['temp']), Constant(1), Constant(0)), FunctionSpace(model.dolf_mesh, 'CG', 1))
-
-        return [fuel_bool, oxygen_bool, product_bool, temp_bool]
+        if params['return_bool']:
+            fuel_bool = project(conditional(le(model.fuel_field_t_now,params['g_ineq_c']['fuel']), Constant(1), Constant(0)), FunctionSpace(model.dolf_mesh, 'CG', 1))
+            oxygen_bool = project(conditional(le(model.oxyxen_field_t_now,params['g_ineq_c']['oxygen']), Constant(1), Constant(0)), FunctionSpace(model.dolf_mesh, 'CG', 1))
+            product_bool = project(conditional(le(model.product_field_t_now,params['g_ineq_c']['product']), Constant(1), Constant(0)), FunctionSpace(model.dolf_mesh, 'CG', 1))
+            temp_bool = project(conditional(le(model.temp_field_t_now,params['g_ineq_c']['temp']), Constant(1), Constant(0)), FunctionSpace(model.dolf_mesh, 'CG', 1))
+            return [fuel_bool, oxygen_bool, product_bool, temp_bool]
+        else:
+            fuel = model.fuel_field_t_now
+            oxygen = model.oxyxen_field_t_now
+            product = model.product_field_t_now
+            temp = model.temp_field_t_now
+            return [fuel, oxygen, product, temp]
     return _get_output_fens
