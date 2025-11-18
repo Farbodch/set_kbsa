@@ -81,7 +81,6 @@ def main():
     
     N = 10 #number of total experiments to run
     cdr_params = {'mesh_2D_dir': 'data/CDR/mesh_save_dir/rectangle.xdmf', 
-                        'mesh_steps': 0.025, 
                         't_end': 0.05, #in seconds
                         'num_steps': 500, #time steps are 0.0001s, 0.1ms
                         'return_bool': False}
@@ -111,8 +110,10 @@ def main():
         flat = [x for sub in all_results for x in sub]
         print(all_results)
         print("Done:", len(flat), "tasks")
-
     t_end = time.time()
+    with open(f"{parent_folder}/meta_data.txt", 'w') as f:
+            f.write(f'parent_uid_{parent_uid};\n\nexperiment_duration_{t_end - t_start:.6f};\ncdr_params_{cdr_params};')
+    
     print("Experiment Done.")
     print(f"Execution time: {t_end - t_start:.6f} seconds")
     # parser = argparse.ArgumentParser(description="...")
