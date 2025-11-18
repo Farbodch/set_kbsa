@@ -5,3 +5,4 @@ fig
 kbsa/__pycache__/
 utils/__pycache__/
 slurm_out
+.DS_Store
