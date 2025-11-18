@@ -2,13 +2,13 @@
 
 #SBATCH --output=/dss/dsshome1/02/ge94nas3/projects/set_kbsa/slurm_out/%x.%j.%N.out
 #SBATCH --error=/dss/dsshome1/02/ge94nas3/projects/set_kbsa/slurm_out/%x.%j.%N.err
-#SBATCH --job-name="cdr_sim"
+#SBATCH --job-name="cdr_experiments"
 
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 #SBATCH --clusters=inter
 #SBATCH --partition=teramem_inter
 #SBATCH --nodes=1
-#SBATCH --ntasks=1
+#SBATCH --ntasks=8
 #SBATCH --cpus-per-task=8
 #SBATCH --export=NONE
 
@@ -17,7 +17,8 @@
 
 
 module load slurm_setup
+module load mpi
 source /dss/dsshome1/02/ge94nas3/.conda_init
 conda activate set_kbsa
 
-python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run.py
+mpiexec -n 8 python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_experiments.py
