@@ -21,4 +21,4 @@ module load mpi
 source /dss/dsshome1/02/ge94nas3/.conda_init
 conda activate set_kbsa
 
-mpiexec -n 8 python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_experiments.py
+mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_experiments.py
