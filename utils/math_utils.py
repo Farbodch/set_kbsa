@@ -1,6 +1,23 @@
 from scipy import integrate
 import numpy as np
 
+def gen_log_uniform(a, b, size=None):
+    u = np.random.uniform(np.log(a), np.log(b), size=size)
+    return np.exp(u)
+
+def gen_uniform(a, b, size=None):
+    return np.random.uniform(a, b, size=size)
+
+def transform_logUnif_to_unitUnif(a, b, log_unif_samples):
+    transformed_samples = (np.log(log_unif_samples) - np.log(a))/(np.log(b)-np.log(a))
+    assert np.sum((transformed_samples>1)) + np.sum((transformed_samples<0))==0
+    return transformed_samples
+
+def transform_unif_to_unifUnif(a, b, unif_samples):
+    transformed_samples = (unif_samples-a)/(b-a)
+    assert np.sum((transformed_samples>1)) + np.sum((transformed_samples<0))==0
+    return transformed_samples
+
 def genXi() -> float:
     return np.random.uniform(-1,1)
 
