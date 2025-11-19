@@ -78,12 +78,13 @@ def main():
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
-    
-    N = 10 #number of total experiments to run
+    N = 100 #number of total experiments to run
     cdr_params = {'mesh_2D_dir': 'data/CDR/mesh_save_dir/rectangle.xdmf', 
                         't_end': 0.05, #in seconds
                         'num_steps': 500, #time steps are 0.0001s, 0.1ms
-                        'return_bool': False}
+                        'return_bool': False,
+                        'mesh_steps': 0.025,
+                        'g_ineq_c': {'fuel': 0.02, 'oxygen': 0.14, 'product': 0.014, 'temp': 900}}
     
     #all workers need to have access to this
     u_indexSuperset_oneHot = _get_u_indexSuperset_oneHot(dim_of_U=5, higher_order=False)

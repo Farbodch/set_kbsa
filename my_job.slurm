@@ -8,7 +8,7 @@
 #SBATCH --clusters=inter
 #SBATCH --partition=teramem_inter
 #SBATCH --nodes=1
-#SBATCH --ntasks=8
+#SBATCH --ntasks=16
 #SBATCH --cpus-per-task=8
 #SBATCH --export=NONE
 
