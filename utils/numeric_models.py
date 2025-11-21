@@ -1,12 +1,14 @@
 import numpy as np
 from dolfin import *
 from dolfin.function.expression import Expression
+from dolfin import MPI as dolfin_MPI
 
 from os import path, makedirs
 from .other_utils import *
 from .math_utils import explicit_1D_Diff_fen as imported_diffuFen_expl
 from .math_utils import gen1DDiffusionCoeff as imported_gen1DDC
 from pathlib import Path
+
 
 class SpecialDict(dict):
     """ 
@@ -89,8 +91,18 @@ class model:
                 indicator_constraint_val: float = 0.0,
                 FEM_projection: bool = False,
                 COMMENT=False,
-                reset_exprim_data_toggle=True):
-        
+                reset_exprim_data_toggle=True,
+                comm=None,
+                local_uid=None,
+                print_local_uid=False):
+        if comm is None:
+            self.comm = dolfin_MPI.comm_self
+        else: 
+            self.comm = comm
+
+        self.local_uid = local_uid
+        if self.local_uid is not None and print_local_uid:
+            print(f'reached local_uid {self.local_uid}.')
         """
         OUTDATED
         Initialize the Soboler class with a specified system type, vector size, and other parameters.
@@ -219,10 +231,9 @@ class model:
             else:
                 self.mesh_steps = mesh_steps
 
-            self.dolf_mesh = Mesh()
-            with XDMFFile(self.mesh_2D_dir) as xdmf:
+            self.dolf_mesh = Mesh(self.comm)
+            with XDMFFile(self.comm, self.mesh_2D_dir) as xdmf:
                 xdmf.read(self.dolf_mesh)
-
             # stoichiometric coefficients
             self.nu_F, self.nu_O, self.nu_P = 2, 1, 2
 
@@ -284,10 +295,26 @@ class model:
 
             # self._build_cdr_system()
 
+            #NEED TO CHANGE PRECONDITIONER TO ALLOW PETSC MPI DISTRIBUTION
+            # self.solver_params = {
+            #     'newton_solver': {
+            #         'linear_solver': 'gmres',  # Use GMRES iterative solver
+            #         'preconditioner': 'ilu',   # Use ILU preconditioner
+            #         'absolute_tolerance': 1e-6,
+            #         'relative_tolerance': 1e-6,
+            #         'maximum_iterations': 35,
+            #         'relaxation_parameter': 1.0,
+            #         'convergence_criterion': 'residual',
+            #         'krylov_solver': {
+            #             'monitor_convergence': False,
+            #             'nonzero_initial_guess': True
+            #         }
+            #     }
+            # }
             self.solver_params = {
                 'newton_solver': {
                     'linear_solver': 'gmres',  # Use GMRES iterative solver
-                    'preconditioner': 'ilu',   # Use ILU preconditioner
+                    'preconditioner': 'hypre_amg',   # Use ILU preconditioner
                     'absolute_tolerance': 1e-6,
                     'relative_tolerance': 1e-6,
                     'maximum_iterations': 35,
@@ -464,7 +491,8 @@ class model:
                     paraview_data_file_name = self.paraview_data_file_name,
                     figSaveDir = self.figSaveDir,
                     COMMENT = self.COMMENT,
-                    reset_exprim_data_toggle=reset_exprim_data_toggle)
+                    reset_exprim_data_toggle=reset_exprim_data_toggle,
+                    comm=self.comm)
         elif 'diffusion' in self.model_type:
             self.__init__(model_type = self.model_type,
                         vectSize = self.vectSize, 
@@ -525,6 +553,7 @@ class model:
         T_0 = coefficients[3]
         phi = coefficients[4]
 
+        
         set_log_active(False)
         if reset:
             self.reset_model()
@@ -843,7 +872,7 @@ class model:
         if path_to_save_FEM_state[-1] != "/":
             path_to_save_FEM_state += '/'
         path_to_save_FEM_state += self.model_save_name
-        with XDMFFile(f"{path_to_save_FEM_state}.xdmf") as xdmf:
+        with XDMFFile(self.comm, f"{path_to_save_FEM_state}.xdmf") as xdmf:
             u = self.diffuFen_curr_u
             u.rename("u", "")
             # xdmf.parameters["functions_share_mesh"] = True
@@ -869,7 +898,7 @@ class model:
             
             V = self.V
             u = Function(V)
-            with XDMFFile(f"{path_to_load_FEM_state}.xdmf") as xdmf:
+            with XDMFFile(self.comm, f"{path_to_load_FEM_state}.xdmf") as xdmf:
                 xdmf.read_checkpoint(u, 'u')
             self.diffuFen_curr_u = u
             # load diffuFen_curr_u

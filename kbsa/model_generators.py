@@ -54,14 +54,16 @@ def get_1D_diff_FEM(params):
         return (model_output<=params['g_ineq_c']).astype(int)
     return _get_at_all_x
 
-def get_CDR(params):
+def get_CDR(params, comm=None, local_uid=None):
     def _get_output_fens(u):
         model = nm.model(model_type='cdr',
                         output_paraview=False,
                         mesh_2D_dir=params['mesh_2D_dir'],
                         mesh_steps=params['mesh_steps'],
                         t_end_cdr=params['t_end'],
-                        num_steps_cdr=params['num_steps'])
+                        num_steps_cdr=params['num_steps'],
+                        comm=comm,
+                        local_uid=local_uid)
         model.get_cdr(coefficients=u, reset=True)
 
         if params['return_bool']:
