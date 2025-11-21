@@ -2,9 +2,7 @@
 from datetime import datetime
 from time import time as timetime
 from uuid import uuid4
-from os import makedirs, environ
-environ["INSTANT_LOG_LEVEL"] = "ERROR"
-environ["FFC_LOG_LEVEL"] = "ERROR"
+from os import makedirs
 from kbsa.utils_kbsa import _get_u_indexSuperset_oneHot
 from kbsa.model_generators import get_CDR
 from utils.math_utils import gen_uniform, gen_log_uniform
