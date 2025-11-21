@@ -79,7 +79,7 @@ def main():
     # comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
-    N = 500 #number of total experiments to run
+    N = 1000 #number of total experiments to run
     max_jobs = (N + size - 1) // size 
     indices = range(rank, N, size)
     padded_indices = [i for i in indices]
