@@ -91,7 +91,7 @@ def main():
 
     cdr_params = {'mesh_2D_dir': 'data/CDR/mesh_save_dir/rectangle.xdmf', 
                         't_end': 0.05, #in seconds
-                        'num_steps': 5, #time steps are 0.0001s, 0.1ms
+                        'num_steps': 500, #time steps are 0.0001s, 0.1ms
                         'return_bool': False,
                         'mesh_steps': 0.025,
                         'g_ineq_c': {'fuel': 0.02, 'oxygen': 0.14, 'product': 0.014, 'temp': 900}}

@@ -6,10 +6,10 @@
 
 #SBATCH --time=02:00:00
 #SBATCH --clusters=inter
-#SBATCH --partition=teramem_inter
+#SBATCH --partition=cm4_inter
 #SBATCH --nodes=1
-#SBATCH --ntasks=12
-#SBATCH --cpus-per-task=8
+#SBATCH --ntasks=20
+#SBATCH --cpus-per-task=4
 #SBATCH --export=NONE
 
 #SBATCH --mail-user=f.chamanian@tum.de
