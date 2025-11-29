@@ -30,8 +30,8 @@ def work(u_indexSuperset_oneHot, cdr_params, rank, parent_path):
     makedirs(local_path, exist_ok=True)
     u_A = gen_log_uniform(a=5.5e11, b=1.5e12, size=6)
     u_E = gen_log_uniform(a=1.5e3, b=9.5e3, size=6)
-    u_T_i = gen_uniform(a=200, b=400, size=6)
-    u_T_o = gen_uniform(a=850, b=1000, size=6)
+    u_T_o = gen_uniform(a=200, b=400, size=6)
+    u_T_i = gen_uniform(a=850, b=1000, size=6)
     u_phi = gen_uniform(a=0.5, b=1.5, size=6)
     u_input_all_A = np_arr([u_A, u_E, u_T_i, u_T_o, u_phi])
     mesh_path = cdr_params["mesh_2D_dir"]
