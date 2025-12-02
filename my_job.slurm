@@ -4,12 +4,12 @@
 #SBATCH --error=/dss/dsshome1/02/ge94nas3/projects/set_kbsa/slurm_out/%x.%j.%N.err
 #SBATCH --job-name="cdr_experiments"
 
-#SBATCH --time=02:00:00
+#SBATCH --time=08:00:00
 #SBATCH --clusters=inter
 #SBATCH --partition=cm4_inter
 #SBATCH --nodes=1
-#SBATCH --ntasks=20
-#SBATCH --cpus-per-task=4
+#SBATCH --ntasks=50
+#SBATCH --cpus-per-task=2
 #SBATCH --export=NONE
 
 #SBATCH --mail-user=f.chamanian@tum.de
