@@ -5,8 +5,6 @@ from numpy import ndarray, float32, uint8, fill_diagonal, array as np_array
 from numpy import mean as np_mean
 from numpy import zeros as np_zeros
 from numpy import load as np_load
-from numpy import arange as np_arange
-from numpy.random import shuffle as np_shuffle
 from numpy.random import uniform as np_unif
 from numpy import abs as np_abs
 from numpy import prod as np_prod
@@ -14,6 +12,8 @@ from numpy import where as np_where
 from numpy import exp as np_exp
 from numpy import sum as np_sum
 from numpy import triu_indices as np_triu_indices
+from numpy import log as np_log
+from numpy import zeros_like as np_zeros_like
 from time import time_ns
 from utils.other_utils import flipStr, getIndexSuperset, directBinStrSum
 import gc
@@ -167,8 +167,7 @@ def sample_fenics_function(field_file_path: str,
                         func_space_V: FunctionSpace,
                         test_domain: ndarray = np_array([[0,1],[0,0.5]]), 
                         num_of_spatial_sampling_m: int = 5,
-                        return_as_bool: bool = False,
-                        g_constraint: float = 0):
+                        g_constraint: float = None):
     m = num_of_spatial_sampling_m
     test_domain = np_array(test_domain)
     
@@ -180,14 +179,13 @@ def sample_fenics_function(field_file_path: str,
         xdmf_1.read_checkpoint(f, field_of_interest, 0)
 
     f_samplings = np_zeros(m)
-
     for i, x in enumerate(x_vect):
         f_samplings[i] = f(x[0], x[1])
 
     del f
     gc.collect()
     
-    if return_as_bool:
+    if g_constraint is not None:
         return (f_samplings <= g_constraint).astype(uint8)
     else:
         return f_samplings
@@ -211,31 +209,30 @@ def approximate_set_lebesgue(binary_system_output_data: ndarray,
     
     return lambda_matrix
 
-def get_K_gamma(field_data_dirs_list: list,
-                n: int,
-                num_of_spatial_sampling_m: int,
-                mesh: Mesh,
-                func_space_V: FunctionSpace,
+def get_K_gamma(field_data_dirs_list: list = None,
+                n: int = None,
+                num_of_spatial_sampling_m: int = None,
+                mesh: Mesh = None,
+                func_space_V: FunctionSpace = None,
                 test_domain: ndarray = np_array([[0,1],[0,0.5]]),
-                return_as_bool: bool = False,
-                g_constraint: float = 0,
-                verbose: bool = False):
+                g_constraint: float = None,
+                verbose: bool = False,
+                binary_system_output_data = None):
     
-    m = num_of_spatial_sampling_m
-    binary_system_output_data = np_zeros((n, m), dtype=uint8)
-
-    if verbose:
-        t0_0 = time_ns()
-    for i, dir in enumerate(field_data_dirs_list):
-        binary_system_output_data[i] = sample_fenics_function(field_file_path=dir,
-                                                mesh=mesh,
-                                                func_space_V=func_space_V,
-                                                test_domain=test_domain,
-                                                num_of_spatial_sampling_m=m,
-                                                return_as_bool=return_as_bool,
-                                                g_constraint=g_constraint)
-    if verbose:
-        t0_1 = time_ns()
+    if binary_system_output_data is None:
+        m = num_of_spatial_sampling_m
+        binary_system_output_data = np_zeros((n, m), dtype=uint8)
+        if verbose:
+            t0_0 = time_ns()
+        for i, dir in enumerate(field_data_dirs_list):
+            binary_system_output_data[i] = sample_fenics_function(field_file_path=dir,
+                                                    mesh=mesh,
+                                                    func_space_V=func_space_V,
+                                                    test_domain=test_domain,
+                                                    num_of_spatial_sampling_m=m,
+                                                    g_constraint=g_constraint)
+        if verbose:
+            t0_1 = time_ns()
     lambda_X = 1
     for i in range(len(test_domain)):
         lambda_curr_dom = max(test_domain[i])-min(test_domain[i])
@@ -263,12 +260,13 @@ def get_K_gamma(field_data_dirs_list: list,
 
     if verbose:
         t4_1 = time_ns()
-        dt_spatial_sampling = (t0_1-t0_0) / 1e9
+        if binary_system_output_data is None:
+            dt_spatial_sampling = (t0_1-t0_0) / 1e9
+            print(f'Wall-clock time of spatial_sampling: {dt_spatial_sampling:.3f} (s)')
         dt_approximate_set_lebesgue = (t1_1-t1_0) / 1e9
         dt_sigma_squared = (t2_1-t1_1) / 1e9
         dt_exponentiate_K_gamma = (t3_1-t2_1) / 1e9
         dt_fill_diag_of_K_gamma = (t4_1-t3_1) / 1e9
-        print(f'Wall-clock time of spatial_sampling: {dt_spatial_sampling:.3f} (s)')
         print(f'Wall-clock time of approximate_set_lebesgue: {dt_approximate_set_lebesgue:.3f} (s)')
         print(f'Wall-clock time of sigma_squared: {dt_sigma_squared:.3f} (s)')
         print(f'Wall-clock time of exponentiate_K_gamma: {dt_exponentiate_K_gamma:.3f} (s)')
@@ -339,7 +337,6 @@ def get_K_U_sobolev_vectorized(data_directory: str = None,
             u_arr[i] = np_load(dir)
     else:
         u_arr = input_data
-
     which_input_mask = np_array([c == '1' for c in which_input_one_hot], dtype=bool)
     u_active = u_arr[:, which_input_mask]
     if chunk_size is None or chunk_size <= 0:
@@ -399,92 +396,35 @@ def calculate_hsic_vectorized(K_U: ndarray, K_gamma: ndarray, verbose: bool = Fa
         print(f'Wall-clock time of calculate_hsic_vectorized: {dt:.3f} (s)')
     return const_0 * np_sum(HSIC_fellmann)
 
+def transform_logUnif_to_unitUnif(min_u, max_u, log_unif_samples):
+    transformed_samples = (np_log(log_unif_samples) - np_log(min_u))/(np_log(max_u)-np_log(min_u))
+    assert np_sum((transformed_samples>1)) + np_sum((transformed_samples<0))==0
+    return transformed_samples
 
-def _get_u_index_superset_one_hot_binstrs(dim_of_U, higher_order=False):
+def transform_unif_to_unitUnif(min_u, max_u, unif_samples):
+    transformed_samples = (unif_samples-min_u)/(max_u-min_u)
+    assert np_sum((transformed_samples>1)) + np_sum((transformed_samples<0))==0
+    return transformed_samples
+
+def transform_all_u_inputs(u_arr: ndarray, u_domain_specs: list):
+    n, d = u_arr.shape
+    assert d == len(u_domain_specs)
+
+    u_arr_transformed = np_zeros_like(u_arr, dtype=float)
+
+    for u_idx in range(d):
+        u_spec = u_domain_specs[u_idx]
+        u_curr_idx = u_arr[:, u_idx]
+        min_u = u_spec['min']
+        max_u = u_spec['max']
+
+        if u_spec['distribution_type'] == 'log_uniform':
+            u_arr_transformed[:, u_idx] = transform_logUnif_to_unitUnif(min_u, max_u, u_curr_idx)
+        elif u_spec['distribution_type'] == 'uniform':
+            u_arr_transformed[:, u_idx] = transform_unif_to_unitUnif(min_u, max_u, u_curr_idx)
+        else:
+            raise ValueError(f"Unknown distribution type '{u_spec['distribution_type']}' for dimension {u_idx}.") 
+    return u_arr_transformed
+
+def get_u_index_superset_one_hot_binstrs(dim_of_U, higher_order=False):
     return [flipStr(i) for i in sorted(getIndexSuperset(dim_of_U, higher_order=higher_order), key=lambda x: directBinStrSum(x))]
-
-def hsic(data_directory: str,
-        mesh_directory: str = 'data/CDR/mesh_save_dir/rectangle.xdmf',
-        field_of_interest: str = 'temp_field',
-        n: int = 10, 
-        num_of_spatial_sampling_m: int = None,
-        test_domain: ndarray = np_array([[0,1],[0,0.5]]),
-        num_of_inputs: int = 5,
-        which_input_one_hot: str = None,
-        return_as_bool: bool = False,
-        g_constraint: float = 0,
-        shuffle_inputs: bool = False,
-        chunk_size=None):
-
-    input_data_dirs_list = get_data_file_dirs(data_directory, data_type='input_data')
-
-    n_max = len(input_data_dirs_list)
-    data_dir_indices = np_arange(0, n_max)
-    if shuffle_inputs:
-        np_shuffle(data_dir_indices)
-        
-    n_max = len(input_data_dirs_list)
-    if n < n_max:
-        data_dir_indices = data_dir_indices[:n]
-    else:
-        n = n_max
-    
-    input_data_dirs_list_to_use = [input_data_dirs_list[i] for i in data_dir_indices[:n]]
-    field_data_dirs_list_to_use = [dir.replace('input_data.npy', field_of_interest) for dir in input_data_dirs_list_to_use]
-
-    #load input data
-    u_arr = np_zeros((n, 5))
-    for i, dir in enumerate(field_data_dirs_list_to_use):
-        u_arr[i] = np_load(dir)
-
-    # need to convert input data to unif[0,1]!
-    if chunk_size is None or chunk_size <= 0:
-        chunk_size = int(n/5)
-    
-    inputs_one_hot_binstrs_list = _get_u_index_superset_one_hot_binstrs(dim_of_U=5)
-    if which_input_one_hot is None:
-        inputs_one_hot_binstrs_list_to_use = inputs_one_hot_binstrs_list
-    else:
-        if which_input_one_hot in inputs_one_hot_binstrs_list:
-            inputs_one_hot_binstrs_list_to_use = [which_input_one_hot, inputs_one_hot_binstrs_list_to_use[-1]]
-    K_U_dict = {}
-    for key in inputs_one_hot_binstrs_list_to_use:
-        K_U_dict[key] = get_K_U_sobolev_vectorized(input_data=u_arr,
-                                        n=n, 
-                                        num_of_inputs=5,
-                                        which_input_one_hot=key, 
-                                        chunk_size=chunk_size,
-                                        verbose=False)
-    for key in inputs_one_hot_binstrs_list_to_use[:-1]:
-        K_U_dict[key] = K_U_dict[key]/K_U_dict[-1]
-
-    
-    if num_of_spatial_sampling_m is None:
-        m = n
-    else:
-        m = num_of_spatial_sampling_m
-    my_mesh = load_mesh(mesh_dir=mesh_directory)
-    V = load_function_space(my_mesh)
-    K_gamma = get_K_gamma(field_data_dirs_list=field_data_dirs_list_to_use,
-                        n=n,
-                        num_of_spatial_sampling_m=m,
-                        mesh=my_mesh,
-                        func_space_V=V,
-                        test_domain=test_domain,
-                        return_as_bool=return_as_bool,
-                        g_constraint=g_constraint)
-    
-    hsic_vals_dict = {}
-    hsic_all = calculate_hsic_vectorized(K_U=K_U_dict[inputs_one_hot_binstrs_list_to_use[-1]], K_gamma=K_gamma, verbose=True)
-    for key in inputs_one_hot_binstrs_list_to_use[:-1]:
-        hsic_vals_dict[key] = calculate_hsic_vectorized(K_U=K_U_dict[key], K_gamma=K_gamma, verbose=True)/hsic_all
-    
-    return hsic_vals_dict
-"""
-NOT!E: NEED TO TAKE THE INDICES OF DIRS OUT SINCE enteries of the outputs matrix k_gamma needs to 
-be able to be associated with the inputs matrix enteries K_u as each i,j. Also, port the port the vectorized
-_build_K_sob to this decoupled case. 
-To Do:
--> vectorize or MPI the k_gamma implementation?
--> MPI the ported version of the _build_K_sob_vectorized
-"""

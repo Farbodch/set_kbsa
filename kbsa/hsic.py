@@ -1,406 +1,116 @@
+from numpy import ndarray, array as np_array
+from numpy import zeros as np_zeros
+from numpy import load as np_load
+from numpy import arange as np_arange
+from numpy.random import shuffle as np_shuffle
+from kbsa.hsic_utils import (get_data_file_dirs, 
+                        transform_all_u_inputs, 
+                        get_u_index_superset_one_hot_binstrs,
+                        get_K_U_sobolev_vectorized,
+                        load_mesh,
+                        load_function_space,
+                        get_K_gamma,
+                        calculate_hsic_vectorized)
+def hsic(data_directory: str,
+        mesh_directory: str = 'data/CDR/mesh_save_dir/rectangle.xdmf',
+        field_of_interest: str = 'temp_field',
+        n: int = 10, 
+        num_of_spatial_sampling_m: int = None,
+        test_domain: ndarray = np_array([[0,1],[0,0.5]]),
+        u_domain_specs: list = [{'distribution_type': 'log_uniform', 'min': 5.5e11, 'max': 1.5e12},
+                                {'distribution_type': 'log_uniform', 'min': 1.5e3, 'max': 9.5e3},
+                                {'distribution_type': 'uniform', 'min': 200, 'max': 400},
+                                {'distribution_type': 'uniform', 'min': 850, 'max': 1000},
+                                {'distribution_type': 'uniform', 'min': 0.5, 'max': 1.5}],
+        u_one_hot_key_map: dict = {'10000': 'A', 
+                                '01000': 'E',
+                                '00100': 'T_i',
+                                '00010': 'T_o',
+                                '00001': 'phi'},
+        which_input_one_hot: str = None,
+        g_constraint: float = None,
+        shuffle_inputs: bool = False,
+        chunk_size=None,
+        binary_system_output_data=None,
+        input_data_dirs_to_use_parall_processed=None):
 
+    # test_domain = np_array(test_domain)
+    num_of_u_inputs = len(u_domain_specs)
 
-import numpy as np
-import time
-from utils.other_utils import flipStr, getIndexSuperset, directBinStrSum, get_x_boundary_indices_on_1D_FEM_mesh
-from kbsa.kernels import get_U_kernel
-from kbsa.model_generators import gen_toy_1_gamma, gen_toy_2_gamma, gen_ishigami, gen_linearDecr_1_gamma, gen_linearDecr_2_gamma, gen_1D_diff_explicit, get_1D_diff_FEM, get_CDR, gen_X1CosPiX2SinPiX2, gen_toy_model_vect
-from dolfin import Point
-from itertools import product
-from math import ceil
+    if input_data_dirs_to_use_parall_processed is None:
+        input_data_dirs_list = get_data_file_dirs(data_directory, data_type='input_data')
 
-from hsic_utils import get_field_file_dirs, load_fenics_function
-
-"""
-    assumptions: 
-        > fenics function data is available -> calculate HSIC
-        > inputs are:
-            - list of all file paths in the main_data_path
-            > For each path, we have the following inputs:
-                - numpy array of realization of random-inputs
-                - need to include distribution of the different random-inputs in the same order of the numpy array of realizations
-                - the fenics functions of observables for the specific random-input realizations
-                - sub-domains (of the main domain) of interest (sets of interest)
-            - include an integer M: the sampling number for the estimating the set-kernel
-            - include save_path?
-        > during:
-            - need to calculate the input-matrix once per random-input variable, and once for the normalization factor
-            - need to calculate the multiple output matrices per sub-domain of interest
-            - calculate the combination of all and S^{HSIC}_{A,}
-"""
-
-#maybe load in fenics functions in batches, sample them in space, then load next batch?
-def _get_files(field_of_interest:str='temp_field', 
-            data_directory:str="data/experiment_data"):
-    data_dir_list_of_fields = get_field_file_dirs(data_directory, chosen_cdr_field=field_of_interest)
-    return 0
-
-
-def _get_u_indexSuperset_oneHot(dim_of_U, higher_order=False):
-    return [flipStr(i) for i in sorted(getIndexSuperset(dim_of_U, higher_order=higher_order), key=lambda x: directBinStrSum(x))]
-
-def _get_lambda_X(x_domain):
-    lambda_X = 1
-    for dim_idx_2 in range(len(x_domain)):
-        b = np.max(x_domain[dim_idx_2])
-        a = np.min(x_domain[dim_idx_2])
-        lambda_X *= b-a # calculate lebesgue measure for input "deterministic"/"spatial" domain
-    return lambda_X
-
-def _gamma_binary_numpy(result, lambda_X=1.0):
-    A = np.asarray(result, dtype=np.float32)
-    if A.ndim == 3:
-        A = np.squeeze(A, axis=-1)
-    n = A.shape[1]
-    ones = A.sum(axis=1)
-    both_one = A @ A.T
-    hamming = ones[:,None] + ones[None,:] - 2*both_one
-    return (hamming / n) * lambda_X
-
-
-
-def _get_gamma_matrices_dict(n, 
-                            x_samples_arr, 
-                            u_samples_arr,
-                            lambda_X,
-                            u_indexSuperset_oneHot,
-                            which_gamma_fen,
-                            gamma_fen_params,
-                            which_cdr_output='temp', 
-                            verbose=False):
-    
-        
-    cdr_str_to_idx = {'fuel': 0, 'oxygen': 1, 'product': 2, 'temp': 3} 
-    gamma_matrices_dict = {}
-    
-    for A_idx, A_key in enumerate(u_indexSuperset_oneHot):
-        t0_A = time.time()
-        if 'FEM' in which_gamma_fen:
-            results_all = np.array([gamma_fen(u=u) for u in u_samples_arr[A_idx]]) 
+        n_max = len(input_data_dirs_list)
+        data_dir_indices = np_arange(0, n_max)
+        if shuffle_inputs:
+            np_shuffle(data_dir_indices)
             
-            index_set_n = np.arange(n)[:, None]
-            index_set_m_of_x = x_samples_arr[A_idx].T
-            result = results_all[index_set_n, index_set_m_of_x]
-        elif which_gamma_fen == 'cdr':
-
-            results_all = np.array([gamma_fen(u=u)[cdr_str_to_idx[which_cdr_output]] for u in u_samples_arr[A_idx]]) 
-            result = np.array([[f(Point(x)) for x in x_samples_arr[A_idx]] for f in results_all])
+        n_max = len(input_data_dirs_list)
+        if n < n_max:
+            data_dir_indices = data_dir_indices[:n]
         else:
-            result = np.array([[f(u) for f in gamma_fens_list_dict[A_key]] for u in u_samples_arr[A_idx]]) 
+            n = n_max
 
-        t1_A = time.time()
-        
-        t0_B = time.time()
-        gamma_matrix=_gamma_binary_numpy(result=result,lambda_X=lambda_X)
-
-        t1_B = time.time()
-        
-
-        t0_C = time.time()
-        curr_sigma_sqrd = np.mean(gamma_matrix)
-        t1_C = time.time()
-            
-            # print(curr_sigma_sqrd)
-        t0_D = time.time()
-        gamma_matrices_dict[A_key] = -1*gamma_matrix/(2*curr_sigma_sqrd)
-        t1_D = time.time()
-
-        if verbose:
-            print(f'\tA={A_key}...')
-            print(f'\ti) Results calculated for {A_key}. Duration: {t1_A-t0_A:.3f} (s).')
-            print(f'\tii) Gamma_matrix calculated for {A_key}. Duration: {t1_B-t0_B:.3f} (s).')
-            print(f'\tiii) curr_sigma_sqrd calculated for {A_key}. Duration: {t1_C-t0_C:.3f} (s).')
-            print(f'\tiv) gamma_matrices_dict adjusted for {A_key}. Duration: {t1_D-t0_D:.3f} (s).')
-            print('\t----------------')
-    return gamma_matrices_dict
-
-
-def get_HSIC(u_domain: list,
-            x_domain: list, 
-            n: int,
-            m: int,
-            kernel_U_type: str = 'sobolev',
-            which_gamma_fen: str = 'toy',
-            gamma_fen_params: dict = {'g_ineq_c': 0, 'a': 7, 'b':0.1},
-            sample_x_from_mesh=False,
-            get_unbiased: bool = True,
-            get_biased: bool = False,
-            get_R2: bool = True,
-            get_fellman: bool = False,
-            with_gpu=False,
-            which_cdr_output='temp',
-            higher_order=False,
-            verbose=False,
-            verbose_inner=False) -> dict:
-    total_time_in_get_HSIC = 0
-    t0_begin_get_HSIC = time.time()
-
-    dim_of_U = len(u_domain) #p in algorithm1
-
-    # includes all possible combination of u indices in one-hot encoding format. 
-    # E.g. for dim_of_U = 3, u_1 == "100", u_1u_3 == "101"
-    u_indexSuperset_oneHot = _get_u_indexSuperset_oneHot(dim_of_U=dim_of_U, higher_order=higher_order)
-    dim_of_u_superset = len(u_indexSuperset_oneHot)
-
-    #generating n samples for each of these sets
-    lambda_X = _get_lambda_X(x_domain=x_domain)
-
-    if 'FEM' in which_gamma_fen:
-        x_samples_arr = _get_x_samples_FEM_arr(x_domain=x_domain,
-                                            m=m, 
-                                            dim_of_u_superset=dim_of_u_superset,
-                                            meshInterval=gamma_fen_params['meshInterval'],
-                                            minSpatialVal=gamma_fen_params['minSpatialVal'],
-                                            maxSpatialVal=gamma_fen_params['maxSpatialVal'])
+        input_data_dirs_list_to_use = [input_data_dirs_list[i] for i in data_dir_indices[:n]]
+        field_data_dirs_list_to_use = [dir.replace('input_data.npy', field_of_interest) for dir in input_data_dirs_list_to_use]
     else:
-        if sample_x_from_mesh:
-            h = gamma_fen_params['meshInterval']
-            x_samples_arr = _get_x_samples_arr(x_domain=x_domain, m=m, dim_of_u_superset=dim_of_u_superset, sample_x_from_mesh=sample_x_from_mesh, h=h)
+        input_data_dirs_list_to_use = input_data_dirs_to_use_parall_processed
+        
+    print(f'Using {len(input_data_dirs_list_to_use)} data points.')
+    #load input data
+    u_arr = np_zeros((n, num_of_u_inputs))
+    for i, dir in enumerate(input_data_dirs_list_to_use):
+        u_arr[i] = np_load(dir)
+    u_arr_transformed = transform_all_u_inputs(u_arr=u_arr, u_domain_specs=u_domain_specs)
+    #maybe a heuristic for choosing chunk sizes?
+    if chunk_size is None or chunk_size <= 0:
+        chunk_size = int(n/5)
+    
+    inputs_one_hot_binstrs_list = get_u_index_superset_one_hot_binstrs(dim_of_U=num_of_u_inputs)
+    if which_input_one_hot is None:
+        inputs_one_hot_binstrs_list_to_use = inputs_one_hot_binstrs_list
+    else:
+        if which_input_one_hot in inputs_one_hot_binstrs_list:
+            inputs_one_hot_binstrs_list_to_use = [which_input_one_hot, inputs_one_hot_binstrs_list[-1]]
         else:
-            x_samples_arr = _get_x_samples_arr(x_domain=x_domain, m=m, dim_of_u_superset=dim_of_u_superset)
+            raise ValueError(f"Invalid which_input_one_hot: {which_input_one_hot} is not in {inputs_one_hot_binstrs_list}.")
+
+    K_U_dict = {}
+    for key in inputs_one_hot_binstrs_list_to_use:
+        K_U_dict[key] = get_K_U_sobolev_vectorized(input_data=u_arr_transformed,
+                                        n=n, 
+                                        num_of_inputs=num_of_u_inputs,
+                                        which_input_one_hot=key, 
+                                        chunk_size=chunk_size,
+                                        verbose=False)
+    # for key in inputs_one_hot_binstrs_list_to_use[:-1]:
+    #     K_U_dict[key] = K_U_dict[key]/K_U_dict[inputs_one_hot_binstrs_list_to_use[-1]]
 
 
-    t1_begin_get_HSIC = time.time()
-    if verbose:
-        print(f'Prliminary get_HSIC ended. Duration: {t1_begin_get_HSIC-t0_begin_get_HSIC:.3f} (s).')
-    total_time_in_get_HSIC += (t1_begin_get_HSIC-t0_begin_get_HSIC)
-    t0_gamm = time.time()
-    if verbose:
-        print('get_gamma_mat started...')
-    gamma_matrices_dict = _get_gamma_matrices_dict(n=n, 
-                                                x_samples_arr=x_samples_arr,
-                                                u_samples_arr=u_samples_arr,
-                                                lambda_X=lambda_X,
-                                                u_indexSuperset_oneHot=u_indexSuperset_oneHot,
-                                                which_gamma_fen=which_gamma_fen, 
-                                                gamma_fen_params=gamma_fen_params,
-                                                which_cdr_output=which_cdr_output,
-                                                verbose=verbose_inner)
-
-    t1_gamm = time.time()
-    if verbose:
-        print(f'get-gamma_mat ended. Duration: {t1_gamm-t0_gamm:.3f} (s).')
-    total_time_in_get_HSIC += (t1_gamm-t0_gamm)
-
-    t0_populate_kernel = time.time()
-    K_sob_matrices_dict = {key: np.zeros((n,n)) for key in u_indexSuperset_oneHot}
-    t0_get_thetas = time.time()
-    thetas = {key: np.std(u_samples_arr[idx], 0) for idx, key in enumerate(u_indexSuperset_oneHot)}
-    t1_get_thetas = time.time()
-    if verbose:
-        print(f'Thetas dict calculated. Duration: {t1_get_thetas-t0_get_thetas:.3f} (s).')
-    total_time_in_get_HSIC += (t1_get_thetas-t0_get_thetas)
-
-    _build_K_sob_vectorized(
-        K_sob_matrices_dict=K_sob_matrices_dict,
-        u_indexSuperset=u_indexSuperset_oneHot,
-        u_samples_arr_to_kernel=u_samples_arr_to_kernel,
-        kernel_U_type=kernel_U_type,
-        chunk_S=None
-    )
-
-    for key, K in K_sob_matrices_dict.items():
-        assert K.shape == (n, n)
-        assert np.allclose(K, K.T, atol=1e-12)
-
-    #LOOP 1
-    for j in range(1, n):
-        #LOOP 2
-        for i in range(j):
-            for supset_A_idx, idx_A_str in enumerate(u_indexSuperset_oneHot):
-                cardinOfInputU = directBinStrSum(idx_A_str)
-                
-                if cardinOfInputU == 1: # e.g. 001, 010, 100           
-                    u_i = u_samples_arr_to_kernel[supset_A_idx, i, supset_A_idx]
-                    u_j = u_samples_arr_to_kernel[supset_A_idx, j, supset_A_idx]
-                    K_sob_matrices_dict[idx_A_str][i,j] = get_U_kernel(params={'u': [u_i, u_j], 'theta': thetas[idx_A_str][supset_A_idx]}, kernel_U_type=kernel_U_type)
-                
-                if cardinOfInputU > 1: # e.g. 011, 101, 110, 111
-                    U_kernel_i = u_samples_arr_to_kernel[supset_A_idx, i, :]
-                    U_kernel_j = u_samples_arr_to_kernel[supset_A_idx, j, :]
-                    counter = 0
-                    for singularOf_B_idx, singularOf_B_str in enumerate(idx_A_str):
-                        if singularOf_B_str == '0':
-                            continue    
-                        u_i = U_kernel_i[singularOf_B_idx]
-                        u_j = U_kernel_j[singularOf_B_idx]
-
-                        if counter == 0:
-                            K_sob_matrices_dict[idx_A_str][i,j] = get_U_kernel(params={'u': [u_i, u_j], 'theta': thetas[idx_A_str][singularOf_B_idx]}, kernel_U_type=kernel_U_type)
-                        else:
-                            K_sob_matrices_dict[idx_A_str][i,j] *= (get_U_kernel(params={'u': [u_i, u_j], 'theta': thetas[idx_A_str][singularOf_B_idx]}, kernel_U_type=kernel_U_type))
-                        counter += 1
-                #both matrix K_U and K_Gamma are symmetric: 
-                K_sob_matrices_dict[idx_A_str][j,i] = K_sob_matrices_dict[idx_A_str][i,j].copy()
-    #     end LOOP 2
-    # end LOOP 1
-    #----------------
-
-    #----------------#----------------
-    t1_populate_kernel = time.time()
-    if verbose:
-        print(f'Kernel matrix K_sob_matrices_dict calculated. Duration: {t1_populate_kernel-t0_populate_kernel:.3f} (s).')
-    total_time_in_get_HSIC += (t1_populate_kernel-t0_populate_kernel)
-    #----------------#----------------
-    t0_mat_muls = time.time()
-    #----------------#----------------
-    if get_biased:
-        H = np.eye(n)-(1/n)
-        const_0_biased = 1/((n-1)*(n-1))
-        HSIC_dict_biased = {}
-    if get_unbiased:
-        const_0_unbiased = (1/(n*(n-3)))
-        const_1_unbiased = (1/((n-1)*(n-2)))
-        const_2_unbiased = (2/(n-2))
-        
-        HSIC_dict_unbiased = {}
-    for _, idx_A_str in enumerate(u_indexSuperset_oneHot):
-        K_gam = np.exp(gamma_matrices_dict[idx_A_str])
-        K_u = K_sob_matrices_dict[idx_A_str]
-        np.fill_diagonal(K_u, 0)
-        np.fill_diagonal(K_gam, 0)
-
-        
-        if get_unbiased:
-            KU_Kgam = K_u @ K_gam
-            tr_KU_Kgam = np.trace(KU_Kgam)
-            oneT_KU_one = np.sum(K_u)
-            oneT_Kgam_one = np.sum(K_gam)
-            oneT_KU_Kgam_one = np.sum(KU_Kgam)
-            HSIC_dict_unbiased[idx_A_str] = const_0_unbiased*(tr_KU_Kgam + const_1_unbiased*(oneT_KU_one*oneT_Kgam_one) - const_2_unbiased*oneT_KU_Kgam_one)
-        if get_biased:           
-            HSIC_dict_biased[idx_A_str] = const_0_biased * np.trace(K_u @ H @ K_gam @ H)
+    if num_of_spatial_sampling_m is None:
+        m = n
+    else:
+        m = num_of_spatial_sampling_m
+    if binary_system_output_data is None:
+        my_mesh = load_mesh(mesh_dir=mesh_directory)
+        V = load_function_space(my_mesh)
+        K_gamma = get_K_gamma(field_data_dirs_list=field_data_dirs_list_to_use,
+                        n=n,
+                        num_of_spatial_sampling_m=m,
+                        mesh=my_mesh,
+                        func_space_V=V,
+                        test_domain=test_domain,
+                        g_constraint=g_constraint)
+    else:
+        K_gamma = get_K_gamma(binary_system_output_data=binary_system_output_data,
+                            test_domain=test_domain)
     
-    if get_R2:
-        HSIC_u_u = {}
-        for _, idx_A_str in enumerate(u_indexSuperset_oneHot):
-            KU = K_sob_matrices_dict[idx_A_str]
-            np.fill_diagonal(KU, 0)
-            KU_KU = KU @ KU
-            tr_KU_KU = np.trace(KU_KU)
-            oneT_KU_one = np.sum(KU)
-            oneT_KU_KU_one = np.sum(KU_KU)
-            HSIC_u_u[idx_A_str] = (1/(n*(n-3)))*(tr_KU_KU + (1/((n-1)*(n-2)))*(oneT_KU_one*oneT_KU_one) - (2/(n-2))*oneT_KU_KU_one)
-            if with_gpu:
-                HSIC_u_u[idx_A_str] = HSIC_u_u[idx_A_str].cpu()
-        HSIC_Gam_Gam = {}
-        for _, idx_A_str in enumerate(u_indexSuperset_oneHot):
-            K_gam = np.exp(gamma_matrices_dict[idx_A_str])
-            np.fill_diagonal(K_gam, 0)
-            Kgam_Kgam = K_gam @ K_gam
-            tr_Kgam_Kgam = np.trace(Kgam_Kgam)
-            oneT_Kgam_one = np.sum(K_gam)
-            oneT_Kgam_Kgam_one = np.sum(Kgam_Kgam)
-            HSIC_Gam_Gam[idx_A_str] = (1/(n*(n-3)))*(tr_Kgam_Kgam + (1/((n-1)*(n-2)))*(oneT_Kgam_one*oneT_Kgam_one) - (2/(n-2))*oneT_Kgam_Kgam_one)
-    #----------------#----------------
-    if get_fellman:
-        #----------------
-        #----------------
-        HSIC_dict_fellman = {key: 0 for key in u_indexSuperset_oneHot}
-        const_0 = 2/(n*(n-1))
-        for _, idx_A_str in enumerate(u_indexSuperset_oneHot):
-            for j in range(1,n):
-                for i in range(j):
-                    k_u_A_i_j = K_sob_matrices_dict[idx_A_str][i,j]
-                    k_set_A_i_j = np.exp(gamma_matrices_dict[idx_A_str][i,j])
-                    HSIC_dict_fellman[idx_A_str] += ((k_u_A_i_j-1)*k_set_A_i_j)
-            HSIC_dict_fellman[idx_A_str] = const_0*HSIC_dict_fellman[idx_A_str]
-        #----------------
-        #----------------
-    t1_mat_muls = time.time()
-    if verbose:
-        print(f'MatMuls ended. Duration: {t1_mat_muls-t0_mat_muls:.3f} (s).')
-    total_time_in_get_HSIC += (t1_mat_muls-t0_mat_muls)
-    HSIC_dicts = {}
-    t0_assign = time.time()
-    #----------------#----------------
-    if get_unbiased:
-        HSIC_dicts['unbiased'] = HSIC_dict_unbiased
-    if get_biased:
-        HSIC_dicts['biased'] = HSIC_dict_biased
-    if get_R2:
-        HSIC_dicts['R2'] = {'HSIC_u_u': HSIC_u_u, 'HSIC_Gam_Gam': HSIC_Gam_Gam}
-    #----------------#----------------
-    # if get_R2:
-    #     HSIC_u_u = hsic_uu_fellman_tiled(u_indexSuperset_oneHot, u_samples_arr_to_kernel, tile=2048, block_dtype=np.float32)
-    #     HSIC_Gam_Gam  = hsic_gamgam_fellman_tiled(u_indexSuperset_oneHot, gamma_matrices_dict, tile=2048, block_dtype=np.float32)
-    #     HSIC_dicts['R2'] = {'HSIC_u_u': HSIC_u_u, 'HSIC_Gam_Gam': HSIC_Gam_Gam}
-    if get_fellman:
-        HSIC_dicts['fellman'] = HSIC_dict_fellman
-    t1_assign = time.time()
+    hsic_vals_dict = {}
+
+    u_all_bitstr = inputs_one_hot_binstrs_list_to_use[-1]
+    hsic_all = calculate_hsic_vectorized(K_U=K_U_dict[u_all_bitstr], K_gamma=K_gamma, verbose=False)
+    for key in inputs_one_hot_binstrs_list_to_use[:-1]:
+        hsic_vals_dict[key] = calculate_hsic_vectorized(K_U=K_U_dict[key], K_gamma=K_gamma, verbose=False)/hsic_all
     
-    total_time_in_get_HSIC += (t1_assign-t0_assign)
-    if verbose:
-        print(f'Assigning dicts ended. Duration: {t1_assign-t0_assign:.3f} (s).')
-        print(f'Total Duration in get_HSIC(): {total_time_in_get_HSIC:.3f} (s).')
-    return HSIC_dicts
-
-
-def _sobol_pairwise_all(U_Snk):
-    Uk = np.transpose(U_Snk, (0, 2, 1))       
-    u_i = Uk[..., :, None]                     
-    u_j = Uk[..., None, :]                      
-    du  = u_i - u_j                           
-    K   = 1.0 + (u_i - 0.5) * (u_j - 0.5) + 0.5 * (du**2 - np.abs(du) + (1.0/6.0))
-    return K
-
-def _build_K_sob_vectorized(
-    K_sob_matrices_dict,
-    u_indexSuperset,           
-    u_samples_arr_to_kernel,   
-    kernel_U_type='sobolev',
-    chunk_S=None               
-):
-
-    # if kernel_U_type != 'sobolev':
-    #     raise ValueError(f"Invalid Kernel: {kernel_U_type}!")
-
-
-    if not isinstance(u_samples_arr_to_kernel, np.ndarray) or u_samples_arr_to_kernel.ndim != 3:
-        raise ValueError("u_samples_arr_to_kernel must be a 3D numpy array of shape (S, n, k).")
-    S, n, k = u_samples_arr_to_kernel.shape
-
-
-    if len(u_indexSuperset) != S:
-        raise ValueError(f"len(u_indexSuperset)={len(u_indexSuperset)} but u_samples_arr_to_kernel.shape[0]={S}.")
-    for key in u_indexSuperset:
-        if len(key) != k:
-            raise ValueError(f"Bitstring '{key}' length {len(key)} != k ({k}).")
-        if "1" not in key:
-            raise ValueError("u_indexSuperset must not include the empty set: found bitstring with no '1'.")
-
-
-    missing = [key for key in u_indexSuperset if key not in K_sob_matrices_dict]
-    if missing:
-        raise ValueError(f"K_sob_matrices_dict is missing keys: {missing}")
-    for key, Kmat in K_sob_matrices_dict.items():
-        if Kmat.shape != (n, n):
-            raise ValueError(f"K_sob_matrices_dict[{key}] has shape {Kmat.shape}, expected {(n, n)}.")
-
-
-    mask_Sk = np.array([[c == '1' for c in bitstr] for bitstr in u_indexSuperset], dtype=bool)
-
-    if chunk_S is None or chunk_S <= 0:
-        chunk_S = S
-
-    start = 0
-    while start < S:
-        end = min(start + chunk_S, S)
-
-        U_chunk = u_samples_arr_to_kernel[start:end]    
-        M_chunk = mask_Sk[start:end]                     
-
-
-        K_Sknn = _sobol_pairwise_all(U_chunk)
-
-
-        K_masked = np.where(M_chunk[:, :, None, None], K_Sknn, 1.0) 
-
-        K_chunk = np.prod(K_masked, axis=1)
-
-
-        for local_idx, global_idx in enumerate(range(start, end)):
-            key = u_indexSuperset[global_idx]
-            K_sob_matrices_dict[key][:] = K_chunk[local_idx]
-
-        start = end
+    hsic_vals_dict_key_mapped = {u_one_hot_key_map[key]: val for key, val in hsic_vals_dict.items()}
+    return hsic_vals_dict_key_mapped

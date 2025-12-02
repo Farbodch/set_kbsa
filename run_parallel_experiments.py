@@ -21,7 +21,7 @@ def work(u_indexSuperset_oneHot, cdr_params, rank, parent_path):
     work() then needs to write every one of the 4 functions to an XDMFFile encoded 
     with an accompanying HDF5 formatted data file.
     work() will also need to write u_sampled to an accompanying .txt file.
-    IMPORTANT: the functions data WITHOUT the .txt file info is USELESS for SA!
+    IMPORTANT: the functions data without the .txt file info is useless for SA!
     """
     fenics_comm = dolfin_MPI.comm_self
 
