@@ -32,7 +32,8 @@ def hsic(data_directory: str,
         shuffle_inputs: bool = False,
         chunk_size=None,
         binary_system_output_data=None,
-        input_data_dirs_to_use_parall_processed=None):
+        input_data_dirs_to_use_parall_processed=None,
+        output_data_type: str='fenics_function'):
 
     # test_domain = np_array(test_domain)
     num_of_u_inputs = len(u_domain_specs)

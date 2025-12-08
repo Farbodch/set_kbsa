@@ -13,7 +13,7 @@ def transform_logUnif_to_unitUnif(a, b, log_unif_samples):
     assert np.sum((transformed_samples>1)) + np.sum((transformed_samples<0))==0
     return transformed_samples
 
-def transform_unif_to_unifUnif(a, b, unif_samples):
+def transform_unif_to_unitUnif(a, b, unif_samples):
     transformed_samples = (unif_samples-a)/(b-a)
     assert np.sum((transformed_samples>1)) + np.sum((transformed_samples<0))==0
     return transformed_samples
