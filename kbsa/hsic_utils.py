@@ -398,12 +398,30 @@ def calculate_hsic_vectorized(K_U: ndarray, K_gamma: ndarray, verbose: bool = Fa
 
 def transform_logUnif_to_unitUnif(min_u, max_u, log_unif_samples):
     transformed_samples = (np_log(log_unif_samples) - np_log(min_u))/(np_log(max_u)-np_log(min_u))
-    assert np_sum((transformed_samples>1)) + np_sum((transformed_samples<0))==0
+    eps = 1e-12
+    try:
+        assert np_sum((transformed_samples>1+eps)) + np_sum((transformed_samples<0-eps))==0
+    except AssertionError:
+        print("logUnif_to_unitUnif Assertion FAILED!")
+        print("Min transformed:", transformed_samples.min())
+        print("Max transformed:", transformed_samples.max())
+        print("Values < 0:", transformed_samples[transformed_samples < 0])
+        print("Values > 1:", transformed_samples[transformed_samples > 1])
+        raise
     return transformed_samples
 
 def transform_unif_to_unitUnif(min_u, max_u, unif_samples):
     transformed_samples = (unif_samples-min_u)/(max_u-min_u)
-    assert np_sum((transformed_samples>1)) + np_sum((transformed_samples<0))==0
+    eps = 1e-12
+    try:
+        assert np_sum((transformed_samples>1+eps)) + np_sum((transformed_samples<0-eps))==0
+    except AssertionError:
+        print("unif_to_unitUnif Assertion FAILED!")
+        print("Min transformed:", transformed_samples.min())
+        print("Max transformed:", transformed_samples.max())
+        print("Values < 0:", transformed_samples[transformed_samples < 0])
+        print("Values > 1:", transformed_samples[transformed_samples > 1])
+        raise
     return transformed_samples
 
 def transform_all_u_inputs(u_arr: ndarray, u_domain_specs: list):

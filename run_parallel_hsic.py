@@ -7,6 +7,10 @@ from kbsa.hsic import hsic
 from kbsa.hsic_utils import get_data_file_dirs
 from dolfin import Mesh, FunctionSpace, Function, XDMFFile, MPI as dolfin_MPI
 from pathlib import Path
+from datetime import datetime
+from time import time as timetime
+from uuid import uuid4
+from os import makedirs
 import gc
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -59,11 +63,11 @@ def main():
     valid_cdr_fields = ['fuel_field', 'oxygen_field', 'product_field', 'temp_field']
     field_of_interest = valid_cdr_fields[1]
     data_directory = "data/experiment_data"
-    test_domain = np_array([[0, 0.1],[0, 0.2]])
+    test_domain = np_array([[0.5, 0.15],[0.2, 0.3]])
     u_domain_specs = [{'distribution_type': 'log_uniform', 'min': 5.5e11, 'max': 1.5e12},
                     {'distribution_type': 'log_uniform', 'min': 1.5e3, 'max': 9.5e3},
-                    {'distribution_type': 'uniform', 'min': 200, 'max': 400},
                     {'distribution_type': 'uniform', 'min': 850, 'max': 1000},
+                    {'distribution_type': 'uniform', 'min': 200, 'max': 400},
                     {'distribution_type': 'uniform', 'min': 0.5, 'max': 1.5}]
     key_map_2d_cdr = {'10000': 'A', 
                     '01000': 'E',
@@ -71,8 +75,8 @@ def main():
                     '00010': 'T_o',
                     '00001': 'phi'}
     g_constraint = 700
-    n = 500
-    m = 1000
+    n = 10000
+    m = 20000
     shuffle_inputs = True
 
     if size > 1:
@@ -157,6 +161,13 @@ def main():
                             binary_system_output_data=binary_system_output_data,
                             input_data_dirs_to_use_parall_processed=input_data_dirs_list_to_use)
         print(hsic_results)
+        parent_uid = datetime.now().strftime("%Y_%m_%d_%H_%M_%S__") + str(uuid4().hex)
+        parent_folder = f"data/hsic_results/{parent_uid}"
+        makedirs(parent_folder, exist_ok=True)
+        with open(f"{parent_folder}/meta_data.txt", 'w') as f:
+                f.write(f'parent_uid_{parent_uid};\nnum_of_outer_loop_sampling_n:{n};\nnum_of_inner_loop_samplings_m{m};\nfield_of_interest:{field_of_interest};\ntest_domain:{test_domain};\ng_constraint:{g_constraint};\ndata_shuffle:{shuffle_inputs};')
+        with open(f"{parent_folder}/results.txt", 'w') as f:
+            f.write(f'{hsic_results}')
         return hsic_results
 
 if __name__ == "__main__":
