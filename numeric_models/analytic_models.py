@@ -1,20 +1,25 @@
-from numpy import (array as np_array, sin as np_sin)
+from numpy import (sin as np_sin)
+from numba import njit
 
-def ishigami(input_data, a=7, b=0.1):
+@njit
+def ishigami_u3_as_x(u_1, u_2, x, a=7, b=0.1):
         """Define the Ishigami function."""
-        u_1, u_2, u_3 = input_data
-        return np_sin(u_1) + a * np_sin(u_2)*np_sin(u_2) + b * u_3*u_3*u_3*u_3 * np_sin(u_1)
+        return np_sin(u_1) + a * np_sin(u_2)*np_sin(u_2) + b * x*x*x*x * np_sin(u_1)
 
-def ishigami_vect_generator(rand_inputs_realization: list, a=7, b=0.1) -> float:
-    u_1, u_2 = np_array(rand_inputs_realization, dtype=float)
-    def ishigami_vect_fen(x):
-        input_data = [u_1, u_2, x]
-        return ishigami(a=a, b=b, input_data=input_data)
-    return ishigami_vect_fen
+def ishigami_vectorized_generator(u, constants: list=[7.0, 0.1]):
+    u_1, u_2 = u
+    a, b = constants
+    def f(x):
+        return ishigami_u3_as_x(u_1, u_2, x, a, b)
+    return f
 
-def fellmann_function_generator(rand_inputs_realization: list):
-    u_1, u_2 = rand_inputs_realization
-    def fellmann_fen(x):
-        x_1, x_2 = x
-        return -x_1*x_1+5*x_2-u_1+u_2*u_2-1
-    return fellmann_fen
+@njit
+def fellmann_function(x_1, x_2, u_1, u_2):
+    return -x_1*x_1+5*x_2-u_1+u_2*u_2-1
+def fellmann_function_generator(u):
+    u_1, u_2 = u
+    def f(x):
+        x_1, x_2 = x[0], x[1]
+        return fellmann_function(x_1, x_2, u_1, u_2)
+    
+    return f

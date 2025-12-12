@@ -12,6 +12,6 @@ def generate_data(distribution_type, min_u, max_u, size=None):
     if distribution_type == 'uniform':
         return gen_uniform(min_u=min_u, max_u=max_u, size=size)
     if distribution_type == 'log_uniform':
-        return gen_uniform(min_u=min_u, max_u=max_u, size=size)    
+        return gen_log_uniform(min_u=min_u, max_u=max_u, size=size)    
     else:
         raise ValueError(f'Distribution {distribution_type} is not supported.')

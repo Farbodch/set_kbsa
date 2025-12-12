@@ -1,57 +1,17 @@
-from numpy import ndarray, uint8, array as np_array
+from numpy import uint8, array as np_array
 from numpy import zeros as np_zeros
 from numpy import arange as np_arange
-from numpy.random import uniform as np_unif
 from numpy.random import shuffle as np_shuffle
-from kbsa.hsic import hsic
-from kbsa.hsic_utils import get_data_file_dirs
-from dolfin import Mesh, FunctionSpace, Function, XDMFFile, MPI as dolfin_MPI
-from pathlib import Path
+from hsic.hsic import hsic
+from hsic.hsic_utils import get_data_file_dirs, load_mesh, load_function_space, sample_fenics_function
+from dolfin import MPI as dolfin_MPI
 from datetime import datetime
 from time import time as timetime
 from uuid import uuid4
 from os import makedirs
-import gc
+
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
-
-def load_mesh_worker(mesh_dir: str = "data/CDR/mesh_save_dir/rectangle.xdmf"):
-    fenics_comm = dolfin_MPI.comm_self
-    mesh = Mesh(fenics_comm)
-    with XDMFFile(fenics_comm, mesh_dir) as xdmf:
-        xdmf.read(mesh)
-    return mesh
-def load_function_space_worker(mesh: Mesh, cg_order=1):
-    V = FunctionSpace(mesh, 'CG', cg_order) 
-    return V
-
-def sample_fenics_function(field_file_path: str, 
-                        mesh: Mesh,
-                        func_space_V: FunctionSpace,
-                        test_domain: ndarray = np_array([[0,1],[0,0.5]]), 
-                        num_of_spatial_sampling_m: int = 5,
-                        g_constraint: float = None):
-    m = num_of_spatial_sampling_m
-    test_domain = np_array(test_domain)
-    
-    x_vect = np_unif([test_domain[0,0], test_domain[1,0]], [test_domain[0,1], test_domain[1,1]], size=(m, 2))
-    field_of_interest = Path(field_file_path).name
-    
-    f = Function(func_space_V)
-    with XDMFFile(mesh.mpi_comm(), field_file_path) as xdmf_1:
-        xdmf_1.read_checkpoint(f, field_of_interest, 0)
-
-    f_samplings = np_zeros(m)
-    for i, x in enumerate(x_vect):
-        f_samplings[i] = f(x[0], x[1])
-
-    del f
-    gc.collect()
-    
-    if g_constraint is not None:
-        return (f_samplings <= g_constraint).astype(uint8)
-    else:
-        return f_samplings
 
 def main():
 
@@ -122,19 +82,19 @@ def main():
             num_of_padded_runs_in_curr_rank += 1
         assert num_of_padded_runs_in_curr_rank==0
         
-        my_mesh = load_mesh_worker(mesh_dir=mesh_directory)
-        V = load_function_space_worker(my_mesh)
+        my_mesh = load_mesh(mesh_dir=mesh_directory)
+        V = load_function_space(my_mesh)
 
         binary_system_output_data_local = np_zeros((n, m), dtype=uint8)
 
         for i in indices:
             dir = field_data_dirs_list_to_use[i]
-            binary_system_output_data_local[i] = sample_fenics_function(field_file_path=dir,
-                                                                                mesh=my_mesh,
-                                                                                func_space_V=V,
-                                                                                test_domain=test_domain,
-                                                                                num_of_spatial_sampling_m=m,
-                                                                                g_constraint=g_constraint)
+            binary_system_output_data_local[i] = sample_fenics_function(data_directory=dir,
+                                                                        mesh=my_mesh,
+                                                                        func_space_V=V,
+                                                                        test_domain=test_domain,
+                                                                        num_of_spatial_sampling_m=m,
+                                                                        g_constraint=g_constraint)
         
 
         local_results = [(i, binary_system_output_data_local[i].copy()) for i in indices]

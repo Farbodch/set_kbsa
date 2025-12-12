@@ -1,9 +1,14 @@
-from numpy import ndarray, array as np_array
-from numpy import zeros as np_zeros
-from numpy import load as np_load
-from numpy import arange as np_arange
+# from numpy import ndarray, array as np_array
+# from numpy import zeros as np_zeros
+# from numpy import load as np_load
+# from numpy import arange as np_arange
 from numpy.random import shuffle as np_shuffle
-from kbsa.hsic_utils import (get_data_file_dirs, 
+from numpy import (ndarray, 
+                array as np_array,
+                zeros as np_zeros,
+                load as np_load,
+                arange as np_arange)
+from hsic.hsic_utils import (get_data_file_dirs, 
                         transform_all_u_inputs, 
                         get_u_index_superset_one_hot_binstrs,
                         get_K_U_sobolev_vectorized,
@@ -11,16 +16,18 @@ from kbsa.hsic_utils import (get_data_file_dirs,
                         load_function_space,
                         get_K_gamma,
                         calculate_hsic_vectorized)
+from numeric_models.analytic_models import ishigami_vectorized_generator as gen_ishigami
+from numba.core.registry import CPUDispatcher
+from types import FunctionType
+
 def hsic(data_directory: str,
-        mesh_directory: str = 'data/CDR/mesh_save_dir/rectangle.xdmf',
-        field_of_interest: str = 'temp_field',
         n: int = 10, 
         num_of_spatial_sampling_m: int = None,
         test_domain: ndarray = np_array([[0,1],[0,0.5]]),
-        u_domain_specs: list = [{'distribution_type': 'log_uniform', 'min': 5.5e11, 'max': 1.5e12},
+        u_domain_specifications: list = [{'distribution_type': 'log_uniform', 'min': 5.5e11, 'max': 1.5e12},
                                 {'distribution_type': 'log_uniform', 'min': 1.5e3, 'max': 9.5e3},
-                                {'distribution_type': 'uniform', 'min': 200, 'max': 400},
                                 {'distribution_type': 'uniform', 'min': 850, 'max': 1000},
+                                {'distribution_type': 'uniform', 'min': 200, 'max': 400},
                                 {'distribution_type': 'uniform', 'min': 0.5, 'max': 1.5}],
         u_one_hot_key_map: dict = {'10000': 'A', 
                                 '01000': 'E',
@@ -33,10 +40,21 @@ def hsic(data_directory: str,
         chunk_size=None,
         binary_system_output_data=None,
         input_data_dirs_to_use_parall_processed=None,
-        output_data_type: str='fenics_function'):
+        process_type: str='fenics_function',
+        fem_process_settings: dict={'fem_mesh_directory': 'data/CDR/mesh_save_dir/rectangle.xdmf',
+                                    'field_of_interest': 'temp_field'},
+        analytical_process_settings: dict={'process_generator': gen_ishigami},
+        verbose_K_gamma: bool = False):
 
+    if process_type == 'fenics_function':
+        fem_mesh_directory = fem_process_settings['fem_mesh_directory']
+        field_of_interest = fem_process_settings['field_of_interest']
+    if process_type == 'analytical':
+        process_generator = analytical_process_settings['process_generator']
+        if not isinstance(process_generator, (FunctionType, CPUDispatcher)):
+            raise TypeError(f"Expected a Numba @njit function or a Python function for process_generator, got {type(process_generator)}!")
     # test_domain = np_array(test_domain)
-    num_of_u_inputs = len(u_domain_specs)
+    num_of_u_inputs = len(u_domain_specifications)
 
     if input_data_dirs_to_use_parall_processed is None:
         input_data_dirs_list = get_data_file_dirs(data_directory, data_type='input_data')
@@ -53,7 +71,9 @@ def hsic(data_directory: str,
             n = n_max
 
         input_data_dirs_list_to_use = [input_data_dirs_list[i] for i in data_dir_indices[:n]]
-        field_data_dirs_list_to_use = [dir.replace('input_data.npy', field_of_interest) for dir in input_data_dirs_list_to_use]
+
+        if process_type == 'fenics_function':
+            data_dirs_to_eval_list = [dir.replace('input_data.npy', field_of_interest) for dir in input_data_dirs_list_to_use]
     else:
         input_data_dirs_list_to_use = input_data_dirs_to_use_parall_processed
         
@@ -62,7 +82,7 @@ def hsic(data_directory: str,
     u_arr = np_zeros((n, num_of_u_inputs))
     for i, dir in enumerate(input_data_dirs_list_to_use):
         u_arr[i] = np_load(dir)
-    u_arr_transformed = transform_all_u_inputs(u_arr=u_arr, u_domain_specs=u_domain_specs)
+    u_arr_transformed = transform_all_u_inputs(u_arr=u_arr, u_domain_specifications=u_domain_specifications)
     #maybe a heuristic for choosing chunk sizes?
     if chunk_size is None or chunk_size <= 0:
         chunk_size = int(n/5)
@@ -93,19 +113,29 @@ def hsic(data_directory: str,
     else:
         m = num_of_spatial_sampling_m
     if binary_system_output_data is None:
-        my_mesh = load_mesh(mesh_dir=mesh_directory)
-        V = load_function_space(my_mesh)
-        K_gamma = get_K_gamma(field_data_dirs_list=field_data_dirs_list_to_use,
-                        n=n,
-                        num_of_spatial_sampling_m=m,
-                        mesh=my_mesh,
-                        func_space_V=V,
-                        test_domain=test_domain,
-                        g_constraint=g_constraint)
+        if process_type == 'fenics_function':
+            my_mesh = load_mesh(mesh_dir=fem_mesh_directory)
+            V = load_function_space(my_mesh)
+            process_generator = None
+        else:
+            my_mesh = None
+            V = None
+        K_gamma = get_K_gamma(process_type=process_type,
+                            data_dirs_to_eval_list=data_dirs_to_eval_list,
+                            n=n,
+                            num_of_spatial_sampling_m=m,
+                            mesh=my_mesh,
+                            func_space_V=V,
+                            test_domain=test_domain,
+                            g_constraint=g_constraint,
+                            verbose=verbose_K_gamma,
+                            process_generator=process_generator)
+
     else:
         K_gamma = get_K_gamma(binary_system_output_data=binary_system_output_data,
                             test_domain=test_domain)
     
+
     hsic_vals_dict = {}
 
     u_all_bitstr = inputs_one_hot_binstrs_list_to_use[-1]
@@ -115,3 +145,4 @@ def hsic(data_directory: str,
     
     hsic_vals_dict_key_mapped = {u_one_hot_key_map[key]: val for key, val in hsic_vals_dict.items()}
     return hsic_vals_dict_key_mapped
+

@@ -1,19 +1,23 @@
 from pathlib import Path
 import ast
-from dolfin import Mesh, FunctionSpace, Function, XDMFFile
-from numpy import ndarray, float32, uint8, fill_diagonal, array as np_array
-from numpy import mean as np_mean
-from numpy import zeros as np_zeros
-from numpy import load as np_load
+from dolfin import Mesh, FunctionSpace, Function, XDMFFile, MPI as dolfin_MPI
+from numpy import (ndarray, float32, uint8, fill_diagonal,
+                array as np_array,
+                mean as np_mean,
+                zeros as np_zeros,
+                load as np_load,
+                abs as np_abs,
+                prod as np_prod,
+                where as np_where,
+                exp as np_exp,
+                sum as np_sum,
+                triu_indices as np_triu_indices,
+                log as np_log,
+                zeros_like as np_zeros_like)
 from numpy.random import uniform as np_unif
-from numpy import abs as np_abs
-from numpy import prod as np_prod
-from numpy import where as np_where
-from numpy import exp as np_exp
-from numpy import sum as np_sum
-from numpy import triu_indices as np_triu_indices
-from numpy import log as np_log
-from numpy import zeros_like as np_zeros_like
+from numba.core.registry import CPUDispatcher
+from types import FunctionType
+from typing import Union
 from time import time_ns
 from utils.other_utils import flipStr, getIndexSuperset, directBinStrSum
 import gc
@@ -135,10 +139,12 @@ def get_data_file_dirs(base_dir: str, data_type: str):
     return collected_paths
 
 def load_mesh(mesh_dir: str = "data/CDR/mesh_save_dir/rectangle.xdmf"):
-    mesh = Mesh()
+    fenics_comm = dolfin_MPI.comm_self
+    mesh = Mesh(fenics_comm)
     with XDMFFile(mesh_dir) as xdmf:
         xdmf.read(mesh)
     return mesh
+
 def load_function_space(mesh: Mesh, cg_order=1):
     V = FunctionSpace(mesh, 'CG', cg_order) 
     return V
@@ -162,7 +168,7 @@ def get_mesh_bounds(mesh):
     xmax, ymax = mesh_coords.max(axis=0)
     return (xmin, xmax), (ymin, ymax)
 
-def sample_fenics_function(field_file_path: str, 
+def sample_fenics_function(data_directory: str, 
                         mesh: Mesh,
                         func_space_V: FunctionSpace,
                         test_domain: ndarray = np_array([[0,1],[0,0.5]]), 
@@ -171,11 +177,11 @@ def sample_fenics_function(field_file_path: str,
     m = num_of_spatial_sampling_m
     test_domain = np_array(test_domain)
     
-    x_vect = np_unif([test_domain[0,0], test_domain[1,0]], [test_domain[0,1], test_domain[1,1]], size=(m, 2))
-    field_of_interest = Path(field_file_path).name
+    x_vect = np_unif(test_domain[:, 0], test_domain[:, 1], size=(m, test_domain.shape[0]))
+    field_of_interest = Path(data_directory).name
     
     f = Function(func_space_V)
-    with XDMFFile(mesh.mpi_comm(), field_file_path) as xdmf_1:
+    with XDMFFile(mesh.mpi_comm(), data_directory) as xdmf_1:
         xdmf_1.read_checkpoint(f, field_of_interest, 0)
 
     f_samplings = np_zeros(m)
@@ -185,6 +191,30 @@ def sample_fenics_function(field_file_path: str,
     del f
     gc.collect()
     
+    if g_constraint is not None:
+        return (f_samplings <= g_constraint).astype(uint8)
+    else:
+        return f_samplings
+
+def sample_analytical_function(data_directory: str,  
+                            process_generator: Union[FunctionType, CPUDispatcher] = None,
+                            test_domain: ndarray = np_array([[0,1]]), 
+                            num_of_spatial_sampling_m: int = 5,
+                            g_constraint: float = None):
+    m = num_of_spatial_sampling_m
+    test_domain = np_array(test_domain)
+    x_vect = np_unif(test_domain[:, 0], test_domain[:, 1], size=(m, test_domain.shape[0]))
+    f_samplings = np_zeros(m)
+
+    input_data_dirs_list = get_data_file_dirs(data_directory, data_type='input_data')
+    u = np_load(input_data_dirs_list)
+
+    f = process_generator(u)
+    for i, x in enumerate(x_vect):
+        f_samplings[i] = f(x)
+    del f
+    gc.collect()
+
     if g_constraint is not None:
         return (f_samplings <= g_constraint).astype(uint8)
     else:
@@ -209,7 +239,8 @@ def approximate_set_lebesgue(binary_system_output_data: ndarray,
     
     return lambda_matrix
 
-def get_K_gamma(field_data_dirs_list: list = None,
+def get_K_gamma(process_type: str = 'fenics_function',
+                data_dirs_to_eval_list: list = None,
                 n: int = None,
                 num_of_spatial_sampling_m: int = None,
                 mesh: Mesh = None,
@@ -217,20 +248,29 @@ def get_K_gamma(field_data_dirs_list: list = None,
                 test_domain: ndarray = np_array([[0,1],[0,0.5]]),
                 g_constraint: float = None,
                 verbose: bool = False,
-                binary_system_output_data = None):
+                binary_system_output_data = None,
+                process_generator: Union[FunctionType, CPUDispatcher] = None):
     
     if binary_system_output_data is None:
         m = num_of_spatial_sampling_m
         binary_system_output_data = np_zeros((n, m), dtype=uint8)
         if verbose:
             t0_0 = time_ns()
-        for i, dir in enumerate(field_data_dirs_list):
-            binary_system_output_data[i] = sample_fenics_function(field_file_path=dir,
-                                                    mesh=mesh,
-                                                    func_space_V=func_space_V,
-                                                    test_domain=test_domain,
-                                                    num_of_spatial_sampling_m=m,
-                                                    g_constraint=g_constraint)
+        if process_type == 'fenics_function':
+            for i, dir in enumerate(data_dirs_to_eval_list):
+                binary_system_output_data[i] = sample_fenics_function(data_directory=dir,
+                                                                    mesh=mesh,
+                                                                    func_space_V=func_space_V,
+                                                                    test_domain=test_domain,
+                                                                    num_of_spatial_sampling_m=m,
+                                                                    g_constraint=g_constraint)
+        if process_type == 'analytical':
+            for i, dir in enumerate(data_dirs_to_eval_list):
+                binary_system_output_data[i] = sample_analytical_function(data_directory=dir,
+                                                                        process_generator=process_generator,
+                                                                        test_domain=test_domain,
+                                                                        num_of_spatial_sampling_m=m,
+                                                                        g_constraint=g_constraint)
         if verbose:
             t0_1 = time_ns()
     lambda_X = 1
@@ -398,12 +438,30 @@ def calculate_hsic_vectorized(K_U: ndarray, K_gamma: ndarray, verbose: bool = Fa
 
 def transform_logUnif_to_unitUnif(min_u, max_u, log_unif_samples):
     transformed_samples = (np_log(log_unif_samples) - np_log(min_u))/(np_log(max_u)-np_log(min_u))
-    assert np_sum((transformed_samples>1)) + np_sum((transformed_samples<0))==0
+    eps = 1e-12
+    try:
+        assert np_sum((transformed_samples>1+eps)) + np_sum((transformed_samples<0-eps))==0
+    except AssertionError:
+        print("logUnif_to_unitUnif Assertion FAILED!")
+        print("Min transformed:", transformed_samples.min())
+        print("Max transformed:", transformed_samples.max())
+        print("Values < 0:", transformed_samples[transformed_samples < 0])
+        print("Values > 1:", transformed_samples[transformed_samples > 1])
+        raise
     return transformed_samples
 
 def transform_unif_to_unitUnif(min_u, max_u, unif_samples):
     transformed_samples = (unif_samples-min_u)/(max_u-min_u)
-    assert np_sum((transformed_samples>1)) + np_sum((transformed_samples<0))==0
+    eps = 1e-12
+    try:
+        assert np_sum((transformed_samples>1+eps)) + np_sum((transformed_samples<0-eps))==0
+    except AssertionError:
+        print("unif_to_unitUnif Assertion FAILED!")
+        print("Min transformed:", transformed_samples.min())
+        print("Max transformed:", transformed_samples.max())
+        print("Values < 0:", transformed_samples[transformed_samples < 0])
+        print("Values > 1:", transformed_samples[transformed_samples > 1])
+        raise
     return transformed_samples
 
 def transform_all_u_inputs(u_arr: ndarray, u_domain_specs: list):

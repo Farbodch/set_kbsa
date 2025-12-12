@@ -3,3 +3,5 @@ from .utils import *
 from .unit_tests import *
 from .numeric_models import *
 from .hsic import *
+from .auxiliary_utils import *
+from .data_generation_scripts import *
