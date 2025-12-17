@@ -7,7 +7,8 @@ from numpy import (ndarray,
                 array as np_array,
                 zeros as np_zeros,
                 load as np_load,
-                arange as np_arange)
+                arange as np_arange,
+                sum as np_sum)
 from hsic.hsic_utils import (get_data_file_dirs, 
                         transform_all_u_inputs, 
                         get_u_index_superset_one_hot_binstrs,
@@ -57,31 +58,57 @@ def hsic(data_directory: str,
     num_of_u_inputs = len(u_domain_specifications)
 
     if input_data_dirs_to_use_parall_processed is None:
-        input_data_dirs_list = get_data_file_dirs(data_directory, data_type='input_data')
-
-        n_max = len(input_data_dirs_list)
-        data_dir_indices = np_arange(0, n_max)
-        if shuffle_inputs:
-            np_shuffle(data_dir_indices)
-            
-        n_max = len(input_data_dirs_list)
-        if n < n_max:
-            data_dir_indices = data_dir_indices[:n]
-        else:
-            n = n_max
-
-        input_data_dirs_list_to_use = [input_data_dirs_list[i] for i in data_dir_indices[:n]]
-
         if process_type == 'fenics_function':
+            input_data_dirs_list = get_data_file_dirs(data_directory, data_type='input_data')
+            n_max = len(input_data_dirs_list)
+            data_dir_indices = np_arange(0, n_max)
+            if n < n_max:
+                data_dir_indices = data_dir_indices[:n]
+            else:
+                n = n_max
+
+            if shuffle_inputs:
+                np_shuffle(data_dir_indices)
+            
+            #if shuffle_inputs was toggled, then we shuffle based on indices and then add the data file directories here
+            input_data_dirs_list_to_use = [input_data_dirs_list[i] for i in data_dir_indices[:n]]
             data_dirs_to_eval_list = [dir.replace('input_data.npy', field_of_interest) for dir in input_data_dirs_list_to_use]
+
+        elif process_type == 'analytical':
+            data_dirs_to_eval_list = None
+            input_data_dirs_list_to_use, n_max_list = get_data_file_dirs(data_directory, 
+                                                                        data_type='input_data', 
+                                                                        process_type='analytical',
+                                                                        return_n_max_list=True)
+            n_max = np_sum(np_array(n_max_list))
+            if type(n) is not int:
+                n = int(n)
+            if n > n_max:
+                n = n_max
+            if n < 1:   
+                n=1
     else:
         input_data_dirs_list_to_use = input_data_dirs_to_use_parall_processed
         
-    print(f'Using {len(input_data_dirs_list_to_use)} data points.')
+    print(f'Using {n} data points.')
     #load input data
     u_arr = np_zeros((n, num_of_u_inputs))
+    u_total_counter = 0
     for i, dir in enumerate(input_data_dirs_list_to_use):
-        u_arr[i] = np_load(dir)
+        if process_type == 'fenics_function':
+            u_arr[i] = np_load(dir)
+        elif process_type == 'analytical':
+                if u_total_counter == n:
+                    continue
+                u_arr_curr = np_load(dir)
+                left_to_add_counts = n - u_total_counter
+
+                if left_to_add_counts >= len(u_arr_curr):
+                    u_arr[u_total_counter:(u_total_counter+len(u_arr_curr))] = u_arr_curr
+                    u_total_counter += len(u_arr_curr)
+                else:
+                    u_arr[u_total_counter:(u_total_counter+left_to_add_counts)] = u_arr_curr[:left_to_add_counts]
+                    u_total_counter += left_to_add_counts
     u_arr_transformed = transform_all_u_inputs(u_arr=u_arr, u_domain_specifications=u_domain_specifications)
     #maybe a heuristic for choosing chunk sizes?
     if chunk_size is None or chunk_size <= 0:
@@ -117,9 +144,11 @@ def hsic(data_directory: str,
             my_mesh = load_mesh(mesh_dir=fem_mesh_directory)
             V = load_function_space(my_mesh)
             process_generator = None
+            u_arr = None
         else:
             my_mesh = None
             V = None
+
         K_gamma = get_K_gamma(process_type=process_type,
                             data_dirs_to_eval_list=data_dirs_to_eval_list,
                             n=n,
@@ -129,7 +158,8 @@ def hsic(data_directory: str,
                             test_domain=test_domain,
                             g_constraint=g_constraint,
                             verbose=verbose_K_gamma,
-                            process_generator=process_generator)
+                            process_generator=process_generator,
+                            u_arr=u_arr)
 
     else:
         K_gamma = get_K_gamma(binary_system_output_data=binary_system_output_data,

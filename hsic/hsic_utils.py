@@ -21,29 +21,42 @@ from typing import Union
 from time import time_ns
 from utils.other_utils import flipStr, getIndexSuperset, directBinStrSum
 import gc
+from re import search as re_search
 
-def parse_meta_data(meta_file: Path):
+def parse_meta_data(meta_file: Path, process_type: str):
     """
     Extract and return cdr_params dict from meta_data.txt.
     """
     text = meta_file.read_text()
+    if process_type == 'cdr':
     #cdr_params appear after "cdr_params_"
-    start_idx = text.find("cdr_params_")
-    if start_idx == -1:
-        return None
-    start_idx += len("cdr_params_")
-    #extract param dictionary content between '{' and '}'
-    dict_str = text[start_idx:].strip()
-    dict_str = dict_str[dict_str.find("{"): dict_str.rfind("}")+1]
+        start_idx = text.find("cdr_params_")
+        if start_idx == -1:
+            return None
+        start_idx += len("cdr_params_")
+        #extract param dictionary content between '{' and '}'
+        dict_str = text[start_idx:].strip()
+        dict_str = dict_str[dict_str.find("{"): dict_str.rfind("}")+1]
+        try:
+            params = ast.literal_eval(dict_str)
+            print(params)
+            return params
+        except:
+            print(f"Could not parse cdr_params in {meta_file}")
+            return None
+    elif process_type == 'analytical':
+        meta_data = {}
+        match = re_search(r"total_num_of_experiments_(\d+)", text)
+        if match:
+            total_num_of_experiments = int(match.group(1))
+        else:
+            total_num_of_experiments = None
+        meta_data['total_num_of_experiments'] = total_num_of_experiments
+        return meta_data
+    else:
+        raise ValueError("This should not be reached.")
 
-    try:
-        params = ast.literal_eval(dict_str)
-        return params
-    except:
-        print(f"Could not parse cdr_params in {meta_file}")
-        return None
-
-def get_data_file_dirs(base_dir: str, data_type: str):
+def get_data_file_dirs(base_dir: str, data_type: str, process_type: str= 'cdr', return_n_max_list: bool=False):
     """
     data_type ∈ {'fuel_field', 'oxygen_field', 'product_field', 'temp_field', 'input_data'}
     Returns a list of file paths for chosen_cdr_field across all qualified sub_sub_directories.
@@ -71,56 +84,73 @@ def get_data_file_dirs(base_dir: str, data_type: str):
         if not parent.is_dir():
             num_of_parent_skips += 1
             continue
-
+        
         #1) check parent/meta_data.txt
         meta_file = parent / "meta_data.txt"
         if not meta_file.exists():
             num_of_parent_skips += 1
             # print(f"Skipping {parent}: no meta_data.txt")
             continue
-
-        params = parse_meta_data(meta_file)
+        
+        params = parse_meta_data(meta_file, process_type=process_type)
         if params is None:
             num_of_parent_skips += 1
             # print(f"Skipping {parent}: could not parse params.")
             continue
-
+        
+        n_max_list = []
+        if process_type == 'cdr':
         #validate required conditions
-        if not (
-            params.get("t_end") == 0.05 and
-            params.get("num_steps") == 500 and
-            params.get("return_bool") is False
-        ):
-            num_of_parent_skips += 1
-            # print(f"Skipping {parent}: incorrect cdr_params")
-            continue
-
+            if not (
+                params.get("t_end") == 0.05 and
+                params.get("num_steps") == 500 and
+                params.get("return_bool") is False
+            ):
+                num_of_parent_skips += 1
+                # print(f"Skipping {parent}: incorrect cdr_params")
+                continue
+        elif process_type == 'analytical' and return_n_max_list:
+            n_max_list.append(params["total_num_of_experiments"])
+        
         #2) check subdirectories
         sub_dirs = [d for d in parent.iterdir() if d.is_dir()]
 
         #skip if parent folder has no subfolder structure
-        if len(sub_dirs) == 0:
-            num_of_parent_skips += 1
-            # print(f"Skipping {parent}: no sub-directories found.")
-            continue
+        if process_type =='cdr':
+            if len(sub_dirs) == 0:
+                num_of_parent_skips += 1
+                # print(f"Skipping {parent}: no sub-directories found.")
+                continue
 
         for sub in sub_dirs:
             sub_subs = [d for d in sub.iterdir() if d.is_dir()]
-            if len(sub_subs) != 6:
+
+            if len(sub_subs) != 6 and process_type=='cdr':
                 num_of_sub_folder_skips += 1
                 # print(f"Skipping {parent}/{sub}: does not have 6 sub_sub-folders.")
                 continue
+            if process_type == 'cdr':
+                #3)check inside each sub_sub_directory for exactly 10 files
+                for sub_sub in sub_subs:
+                    files = [f for f in sub_sub.iterdir() if f.is_file()]
+                    if len(files) != 10 and process_type == 'cdr':
+                        num_of_sub_sub_folder_skips += 1
+                        # print(f"Skipping {parent}/{sub}/{sub_sub}: does not contain 9 files.")
+                        continue
 
-            #3)check inside each sub_sub_directory for exactly 10 files
-            for sub_sub in sub_subs:
-                files = [f for f in sub_sub.iterdir() if f.is_file()]
-                if len(files) != 10:
-                    num_of_sub_sub_folder_skips += 1
-                    # print(f"Skipping {parent}/{sub}/{sub_sub}: does not contain 9 files.")
-                    continue
-
-                #4)collect chosen .h5 or .npy file
-                wanted_path = sub_sub / target_filename
+                    #4.a)collect chosen .h5 or .npy file
+                    wanted_path = sub_sub / target_filename
+                    if wanted_path.exists():
+                        if data_type == 'input_data':
+                            collected_paths.append(str(wanted_path))
+                        else:
+                            collected_paths.append(str(wanted_path)[:-3])
+                    else:
+                        num_of_sub_sub_folder_skips += 1
+                        print(f"Warning: {wanted_path} missing.")
+            elif process_type == 'analytical':
+                #4.b)collect chosen .h5 or .npy file
+                wanted_path = sub / target_filename
                 if wanted_path.exists():
                     if data_type == 'input_data':
                         collected_paths.append(str(wanted_path))
@@ -129,13 +159,14 @@ def get_data_file_dirs(base_dir: str, data_type: str):
                 else:
                     num_of_sub_sub_folder_skips += 1
                     print(f"Warning: {wanted_path} missing.")
-                    
         print(f"Num_of_parent_skips: {num_of_parent_skips}")
         print(f"num_of_sub_folder_skips: {num_of_sub_folder_skips}")
         print(f"num_of_sub_sub_folder_skips: {num_of_sub_sub_folder_skips}")
         # if not parent_qualified:
         #     continue
-
+    if return_n_max_list:
+        return collected_paths, n_max_list
+    
     return collected_paths
 
 def load_mesh(mesh_dir: str = "data/CDR/mesh_save_dir/rectangle.xdmf"):
@@ -196,18 +227,18 @@ def sample_fenics_function(data_directory: str,
     else:
         return f_samplings
 
-def sample_analytical_function(data_directory: str,  
+def sample_analytical_function(u: ndarray,  
                             process_generator: Union[FunctionType, CPUDispatcher] = None,
                             test_domain: ndarray = np_array([[0,1]]), 
                             num_of_spatial_sampling_m: int = 5,
                             g_constraint: float = None):
     m = num_of_spatial_sampling_m
     test_domain = np_array(test_domain)
-    x_vect = np_unif(test_domain[:, 0], test_domain[:, 1], size=(m, test_domain.shape[0]))
+    x_vect = np_unif(low=test_domain[:, 0], high=test_domain[:, 1], size=(m, test_domain.shape[0]))
     f_samplings = np_zeros(m)
 
-    input_data_dirs_list = get_data_file_dirs(data_directory, data_type='input_data')
-    u = np_load(input_data_dirs_list)
+    # input_data_dirs_list = get_data_file_dirs(data_directory, data_type='input_data')
+    # u = np_load(input_data_dirs_list)
 
     f = process_generator(u)
     for i, x in enumerate(x_vect):
@@ -249,7 +280,8 @@ def get_K_gamma(process_type: str = 'fenics_function',
                 g_constraint: float = None,
                 verbose: bool = False,
                 binary_system_output_data = None,
-                process_generator: Union[FunctionType, CPUDispatcher] = None):
+                process_generator: Union[FunctionType, CPUDispatcher] = None,
+                u_arr: ndarray = None):
     
     if binary_system_output_data is None:
         m = num_of_spatial_sampling_m
@@ -265,8 +297,13 @@ def get_K_gamma(process_type: str = 'fenics_function',
                                                                     num_of_spatial_sampling_m=m,
                                                                     g_constraint=g_constraint)
         if process_type == 'analytical':
-            for i, dir in enumerate(data_dirs_to_eval_list):
-                binary_system_output_data[i] = sample_analytical_function(data_directory=dir,
+            try:
+                assert u_arr is not None
+            except AssertionError:
+                print('u_arr was NOT passed-in function K_Gamma, but is required when process_type is \'analytical\'.')
+                raise AssertionError
+            for i, u_i in enumerate(u_arr):
+                binary_system_output_data[i] = sample_analytical_function(u=u_i,
                                                                         process_generator=process_generator,
                                                                         test_domain=test_domain,
                                                                         num_of_spatial_sampling_m=m,
@@ -464,14 +501,14 @@ def transform_unif_to_unitUnif(min_u, max_u, unif_samples):
         raise
     return transformed_samples
 
-def transform_all_u_inputs(u_arr: ndarray, u_domain_specs: list):
+def transform_all_u_inputs(u_arr: ndarray, u_domain_specifications: list):
     n, d = u_arr.shape
-    assert d == len(u_domain_specs)
+    assert d == len(u_domain_specifications)
 
     u_arr_transformed = np_zeros_like(u_arr, dtype=float)
 
     for u_idx in range(d):
-        u_spec = u_domain_specs[u_idx]
+        u_spec = u_domain_specifications[u_idx]
         u_curr_idx = u_arr[:, u_idx]
         min_u = u_spec['min']
         max_u = u_spec['max']
