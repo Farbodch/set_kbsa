@@ -1,2 +1,4 @@
 from unit_tests import test_utils
-from unit_tests import test_kbsa
+from unit_tests import test_auxiliary_utils
+from unit_tests import test_hsic
+from unit_tests import test_numeric_models

@@ -251,24 +251,29 @@ def sample_analytical_function(u: ndarray,
     else:
         return f_samplings
 
+def _get_direct_sums(data_array: ndarray, axis=1) -> ndarray:
+    """input: nxm ndarray -> output: row sums /w output shape (n,)"""
+    return data_array.sum(axis=axis) 
+def _get_gram_matrix(binary_data_array: ndarray) -> ndarray:
+    """input: nxm ndarray -> output: pairwise AND count /w output shape (n,n)"""
+    return binary_data_array @ binary_data_array.T
+def _get_XOR_count(binary_direct_sums: ndarray, pairwise_AND_count: ndarray) -> ndarray:
+    """xOr count using identity AxOrB=a+b-2(aANDb)"""
+    xOr_count = binary_direct_sums[:, None] + binary_direct_sums[None, :] - 2*pairwise_AND_count
+    return xOr_count.astype(float32)
+
 def approximate_set_lebesgue(binary_system_output_data: ndarray,
-                            lambda_X: float) -> ndarray:
-    
+                            lambda_X: float) -> ndarray:  
     _, m = binary_system_output_data.shape
 
     #row sums /w output shape (n,)
-    just_ones_count = binary_system_output_data.sum(axis=1)
-
+    binary_direct_sums = _get_direct_sums(data_array=binary_system_output_data)
     #pairwise AND count /w output shape (n,n)
-    and_count = binary_system_output_data @ binary_system_output_data.T
-
+    pairwise_and_count = _get_gram_matrix(binary_data_array=binary_system_output_data)
     #xOr count using identity AxOrB=a+b-2(aANDb)
-    xOr_count = just_ones_count[:, None] + just_ones_count[None, :] - 2*and_count
-    xOr_count = xOr_count.astype(float32)
-
-    lambda_matrix = lambda_X*(xOr_count/m)
-    
-    return lambda_matrix
+    xOr_count = _get_XOR_count(binary_direct_sums=binary_direct_sums,
+                               pairwise_AND_count=pairwise_and_count)
+    return lambda_X*(xOr_count/m)
 
 def get_K_gamma(process_type: str = 'fenics_function',
                 data_dirs_to_eval_list: list = None,
