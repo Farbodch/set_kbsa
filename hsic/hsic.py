@@ -1,7 +1,3 @@
-# from numpy import ndarray, array as np_array
-# from numpy import zeros as np_zeros
-# from numpy import load as np_load
-# from numpy import arange as np_arange
 from numpy.random import shuffle as np_shuffle
 from numpy import (ndarray, 
                 array as np_array,
@@ -12,11 +8,13 @@ from numpy import (ndarray,
 from hsic.hsic_utils import (get_data_file_dirs, 
                         transform_all_u_inputs, 
                         get_u_index_superset_one_hot_binstrs,
-                        get_K_U_sobolev_vectorized,
                         load_mesh,
                         load_function_space,
                         get_K_gamma,
-                        calculate_hsic_vectorized)
+                        get_K_U_sobolev_vectorized,
+                        get_K_U_sobolev_looped,
+                        calculate_hsic_vectorized,
+                        calculate_hsic_looped)
 from numeric_models.analytic_models import ishigami_vectorized_generator as gen_ishigami
 from numba.core.registry import CPUDispatcher
 from types import FunctionType
@@ -45,6 +43,8 @@ def hsic(data_directory: str,
         fem_process_settings: dict={'fem_mesh_directory': 'data/CDR/mesh_save_dir/rectangle.xdmf',
                                     'field_of_interest': 'temp_field'},
         analytical_process_settings: dict={'process_generator': gen_ishigami},
+        vectorized_hsic_flag: bool = True,
+        vectorized_K_U_flag: bool = True,
         verbose_K_gamma: bool = False):
 
     if process_type == 'fenics_function':
@@ -125,12 +125,19 @@ def hsic(data_directory: str,
 
     K_U_dict = {}
     for key in inputs_one_hot_binstrs_list_to_use:
-        K_U_dict[key] = get_K_U_sobolev_vectorized(input_data=u_arr_transformed,
-                                        n=n, 
-                                        num_of_inputs=num_of_u_inputs,
-                                        which_input_one_hot=key, 
-                                        chunk_size=chunk_size,
-                                        verbose=False)
+        if vectorized_K_U_flag:
+            K_U_dict[key] = get_K_U_sobolev_vectorized(input_data=u_arr_transformed,
+                                            n=n, 
+                                            num_of_inputs=num_of_u_inputs,
+                                            which_input_one_hot=key, 
+                                            chunk_size=chunk_size,
+                                            verbose=False)
+        else:
+            K_U_dict[key] = get_K_U_sobolev_looped(input_data=u_arr_transformed,
+                                            n=n, 
+                                            num_of_inputs=num_of_u_inputs,
+                                            which_input_one_hot=key,
+                                            verbose=False)
     # for key in inputs_one_hot_binstrs_list_to_use[:-1]:
     #     K_U_dict[key] = K_U_dict[key]/K_U_dict[inputs_one_hot_binstrs_list_to_use[-1]]
 
@@ -169,10 +176,15 @@ def hsic(data_directory: str,
     hsic_vals_dict = {}
 
     u_all_bitstr = inputs_one_hot_binstrs_list_to_use[-1]
-    hsic_all = calculate_hsic_vectorized(K_U=K_U_dict[u_all_bitstr], K_gamma=K_gamma, verbose=False)
+    if vectorized_hsic_flag:
+        hsic_all = calculate_hsic_vectorized(K_U=K_U_dict[u_all_bitstr], K_gamma=K_gamma, verbose=False)
+    else:
+        hsic_all = calculate_hsic_looped(K_U=K_U_dict[u_all_bitstr], K_gamma=K_gamma, verbose=False)
     for key in inputs_one_hot_binstrs_list_to_use[:-1]:
-        hsic_vals_dict[key] = calculate_hsic_vectorized(K_U=K_U_dict[key], K_gamma=K_gamma, verbose=False)/hsic_all
-    
+        if vectorized_hsic_flag:
+            hsic_vals_dict[key] = calculate_hsic_vectorized(K_U=K_U_dict[key], K_gamma=K_gamma, verbose=False)/hsic_all
+        else:
+            hsic_vals_dict[key] = calculate_hsic_looped(K_U=K_U_dict[key], K_gamma=K_gamma, verbose=False)/hsic_all
     hsic_vals_dict_key_mapped = {u_one_hot_key_map[key]: val for key, val in hsic_vals_dict.items()}
     return hsic_vals_dict_key_mapped
 

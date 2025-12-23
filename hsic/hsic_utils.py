@@ -13,7 +13,8 @@ from numpy import (ndarray, float32, uint8, fill_diagonal,
                 sum as np_sum,
                 triu_indices as np_triu_indices,
                 log as np_log,
-                zeros_like as np_zeros_like)
+                zeros_like as np_zeros_like,
+                clip as np_clip)
 from numpy.random import uniform as np_unif
 from numba.core.registry import CPUDispatcher
 from types import FunctionType
@@ -261,7 +262,6 @@ def _get_XOR_count(binary_direct_sums: ndarray, pairwise_AND_count: ndarray) -> 
     """xOr count using identity AxOrB=a+b-2(aANDb)"""
     xOr_count = binary_direct_sums[:, None] + binary_direct_sums[None, :] - 2*pairwise_AND_count
     return xOr_count.astype(float32)
-
 def approximate_set_lebesgue(binary_system_output_data: ndarray,
                             lambda_X: float) -> ndarray:  
     _, m = binary_system_output_data.shape
@@ -313,33 +313,20 @@ def get_K_gamma(process_type: str = 'fenics_function',
                                                                         test_domain=test_domain,
                                                                         num_of_spatial_sampling_m=m,
                                                                         g_constraint=g_constraint)
-        if verbose:
-            t0_1 = time_ns()
+        if verbose: t0_1 = time_ns()
     lambda_X = 1
     for i in range(len(test_domain)):
         lambda_curr_dom = max(test_domain[i])-min(test_domain[i])
         if lambda_curr_dom != 0:
             lambda_X *= lambda_curr_dom
-    if verbose:
-        t1_0 = time_ns()
-
+    if verbose: t1_0 = time_ns()
     lambda_matrix = approximate_set_lebesgue(binary_system_output_data=binary_system_output_data, lambda_X=lambda_X)
-
-    if verbose:
-        t1_1 = time_ns()
-
+    if verbose: t1_1 = time_ns()
     sigma_squared = np_mean(lambda_matrix)
-
-    if verbose:
-        t2_1 = time_ns()
-
+    if verbose: t2_1 = time_ns()
     K_gamma = np_exp(-1.0*lambda_matrix/(2*sigma_squared))
-
-    if verbose:
-        t3_1 = time_ns()
-
+    if verbose: t3_1 = time_ns()
     fill_diagonal(K_gamma, 0.0)
-
     if verbose:
         t4_1 = time_ns()
         if binary_system_output_data is None:
@@ -353,7 +340,6 @@ def get_K_gamma(process_type: str = 'fenics_function',
         print(f'Wall-clock time of sigma_squared: {dt_sigma_squared:.3f} (s)')
         print(f'Wall-clock time of exponentiate_K_gamma: {dt_exponentiate_K_gamma:.3f} (s)')
         print(f'Wall-clock time of fill_diag_of_K_gamma: {dt_fill_diag_of_K_gamma:.3f} (s)')
-
     return K_gamma
 
 def sobolev_kernel_univar(u_i, u_j):
@@ -366,9 +352,7 @@ def get_K_U_sobolev_looped(data_directory: str = None,
                     which_input_one_hot: str = '00001',
                     input_data=None,
                     verbose: bool = False):
-    if verbose:
-        t0 = time_ns()    
-
+    if verbose: t0 = time_ns()    
     dim_U = num_of_inputs
     if input_data is None:
         input_data_dirs_list = get_data_file_dirs(data_directory, data_type='input_data')
@@ -377,19 +361,14 @@ def get_K_U_sobolev_looped(data_directory: str = None,
             u_arr[i] = np_load(dir)
     else:
         u_arr = input_data
-
     which_input_mask = np_array([c == '1' for c in which_input_one_hot], dtype=bool)
     active_dims = np_where(which_input_mask)[0]
-
     if len(active_dims) == 0:
         raise ValueError("which_input_one_hot must include at least one dimension.")
-
     K_sob_matrix = np_zeros((n,n), dtype=float)
-
     for j in range(n):
         for i in range(j+1):
             K_ij = 1.0
-
             for d in active_dims:
                 u_i = u_arr[i, d]
                 u_j = u_arr[j, d]
@@ -409,8 +388,7 @@ def get_K_U_sobolev_vectorized(data_directory: str = None,
                     chunk_size=None,
                     input_data=None,
                     verbose:bool=False):
-    if verbose:
-        t0 = time_ns()
+    if verbose: t0 = time_ns()
     dim_U = num_of_inputs
     if input_data is None:
         input_data_dirs_list = get_data_file_dirs(data_directory, data_type='input_data')
@@ -480,6 +458,7 @@ def calculate_hsic_vectorized(K_U: ndarray, K_gamma: ndarray, verbose: bool = Fa
 
 def transform_logUnif_to_unitUnif(min_u, max_u, log_unif_samples):
     transformed_samples = (np_log(log_unif_samples) - np_log(min_u))/(np_log(max_u)-np_log(min_u))
+    transformed_samples = np_clip(transformed_samples, 0.0, 1.0)
     eps = 1e-12
     try:
         assert np_sum((transformed_samples>1+eps)) + np_sum((transformed_samples<0-eps))==0
@@ -494,6 +473,7 @@ def transform_logUnif_to_unitUnif(min_u, max_u, log_unif_samples):
 
 def transform_unif_to_unitUnif(min_u, max_u, unif_samples):
     transformed_samples = (unif_samples-min_u)/(max_u-min_u)
+    transformed_samples = np_clip(transformed_samples, 0.0, 1.0)
     eps = 1e-12
     try:
         assert np_sum((transformed_samples>1+eps)) + np_sum((transformed_samples<0-eps))==0
@@ -517,8 +497,17 @@ def transform_all_u_inputs(u_arr: ndarray, u_domain_specifications: list):
         u_curr_idx = u_arr[:, u_idx]
         min_u = u_spec['min']
         max_u = u_spec['max']
-
+        try:
+            assert min_u < max_u
+        except AssertionError:
+            print(f"Invalid min and max for distribution of input u_{u_idx}. min_u {min_u} is NOT less than max_u {max_u}!")
+            raise
         if u_spec['distribution_type'] == 'log_uniform':
+            try:
+                assert min_u > 0
+            except AssertionError:
+                print(f"Invalid min for log_uniform distribution of input u_{u_idx}. min_u must be larger than is, {min_u} is NOT!")
+                raise
             u_arr_transformed[:, u_idx] = transform_logUnif_to_unitUnif(min_u, max_u, u_curr_idx)
         elif u_spec['distribution_type'] == 'uniform':
             u_arr_transformed[:, u_idx] = transform_unif_to_unitUnif(min_u, max_u, u_curr_idx)
