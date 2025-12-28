@@ -24,8 +24,7 @@ def main():
     size = comm.Get_size()
     valid_cdr_fields = ['fuel_field', 'oxygen_field', 'product_field', 'temp_field']
     process_model_name = '2d_cdr'
-    #DATA_DIRECTORY NOT UNIFIED!! FIX THIS! (LRZ vs Home_dir locations are different.)
-    process_settings={'2d_cdr': {'data_directory': 'data/experiment_data',
+    process_settings={'2d_cdr': {'data_directory': 'data/experiment_data/cdr/hsic',
                                 'fem_mesh_directory': 'data/CDR/mesh_save_dir/rectangle.xdmf',
                                 'u_domain_specifications': [{'distribution_type': 'log_uniform', 'min': 5.5e11, 'max': 1.5e12},
                                                             {'distribution_type': 'log_uniform', 'min': 1.5e3, 'max': 9.5e3},
