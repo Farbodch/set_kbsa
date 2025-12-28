@@ -2,13 +2,61 @@ import pytest
 import hsic.hsic_utils as hu
 import numpy as np
 from scipy import stats
+from numeric_models.analytic_models import (ishigami_vectorized_generator as gen_ishigami, fellmann_function_generator as gen_fellmann)
+from types import FunctionType
 
+def fixed_uniform_midpoint(low, high, size):
+    low = np.asarray(low)
+    high = np.asarray(high)
+    midpoint = (low + high) / 2
+    return np.broadcast_to(midpoint, size)
+def fixed_uniform_linspace(low, high, size):
+        low = np.asarray(low)
+        high = np.asarray(high)
+        linspaces_grid = [np.linspace(low[j], high[j], size[0]) for j in range(size[1])]
+        return np.column_stack(linspaces_grid)
 #-------------------------------
 # fixtures
 #-------------------------------
-# @pytest.fixture
-# def some_fen(): return 0
-
+@pytest.fixture
+def fix_np_unif_rng_to_midpoint(monkeypatch):
+    #force np_unif in hsic.hsic_utils to be fixed to midpoint of the domain for repeatable tests.
+    def _fixed_uniform(low, high, size):
+        return fixed_uniform_midpoint(low, high, size)
+    monkeypatch.setattr("hsic.hsic_utils.np_unif", _fixed_uniform)
+@pytest.fixture
+def fix_np_unif_rng_to_linspace(monkeypatch):
+    #force np_unif in hsic.hsic_utils to be fixed to linearly spaced points on the domain for repeatable tests.
+    def _fixed_uniform(low, high, size):
+        return fixed_uniform_linspace(low, high, size)
+    monkeypatch.setattr("hsic.hsic_utils.np_unif", _fixed_uniform)
+@pytest.fixture
+def linear_process_fixture():
+    #f(x) = u1 + u2 + x
+    def gen_f(u):
+        u1, u2 = u
+        def f(x):
+            return u1 + u2 + x
+        return f
+    return gen_f
+@pytest.fixture
+def quadratic_process_fixture():
+    #f(x) = u1 * ||x||^2 + u2
+    def gen_f(u):
+        u1, u2 = u
+        def f(x):
+            return u1 * np.sum(x**2) + u2
+        return f
+    return gen_f
+@pytest.fixture
+def fixed_test_domain_1d():
+    return np.array([[0.0, 2.0]])
+@pytest.fixture
+def fixed_test_domain_2d():
+    return np.array([[0.0, 1.0], [-1.0, 1.0]])
+@pytest.fixture
+def fixed_u_2d():
+    return np.array([1.0, 2.0])
 #-------------------------------
 # test_hu_approximate_set_lebesgue
 #-------------------------------
@@ -406,5 +454,206 @@ def test_transform_all_u_inputs_4():
     specs = [{'min': 0, 'max': 1, 'distribution_type': 'gaussian'}]
     with pytest.raises(ValueError):
         hu.transform_all_u_inputs(u_arr, specs)
-# def test_transform_all_u_inputs_5():
-    
+#-------------------------------
+# test_sample_analytical_function!!!!! CHANGE LINEAR_PROCESS_FIXTURE AND FIX THESE TESTCASES!!
+#-------------------------------
+# def test_sample_analytical_function_1(linear_process_fixture, fixed_test_domain_1d, fixed_u_2d):
+#     m = 10
+#     computed = hu.sample_analytical_function(u=fixed_u_2d,
+#                                         process_generator=linear_process_fixture,
+#                                         test_domain=fixed_test_domain_1d,
+#                                         num_of_spatial_sampling_m=m)
+#     assert isinstance(computed, np.ndarray),  f"{computed}"
+#     assert computed.shape == (m,)
+# def test_sample_analytical_function_2(linear_process_fixture, fixed_test_domain_2d, fixed_u_2d):
+#     m = 5
+#     computed_1 = hu.sample_analytical_function(u=fixed_u_2d,
+#                                             process_generator=linear_process_fixture,
+#                                             test_domain=fixed_test_domain_2d,
+#                                             num_of_spatial_sampling_m=m,
+#                                             rng=fixed_uniform_midpoint)
+#     computed_2 = hu.sample_analytical_function(u=fixed_u_2d,
+#                                             process_generator=linear_process_fixture,
+#                                             test_domain=fixed_test_domain_2d,
+#                                             num_of_spatial_sampling_m=m,
+#                                             rng=fixed_uniform_midpoint)
+#     assert np.array_equal(computed_1, computed_2)
+# def test_sample_analytical_function_3(linear_process_fixture, fixed_test_domain_1d, fixed_u_2d):
+#     g_constraint = 5.0
+#     m = 20
+#     computed = hu.sample_analytical_function(u=fixed_u_2d,
+#                                         process_generator=linear_process_fixture,
+#                                         test_domain=fixed_test_domain_1d,
+#                                         num_of_spatial_sampling_m=m,
+#                                         g_constraint=g_constraint,
+#                                         rng=fixed_uniform_midpoint)
+
+#     assert computed.dtype == np.uint8
+#     assert set(np.unique(computed)).issubset({0, 1})
+# def test_sample_analytical_function_4(linear_process_fixture, fixed_test_domain_1d):
+#     u = np.array([1.0, 1.0])
+#     g_constraint = 10.0
+#     m = 10
+#     computed = hu.sample_analytical_function(u=u,
+#                                         process_generator=linear_process_fixture,
+#                                         test_domain=fixed_test_domain_1d,
+#                                         num_of_spatial_sampling_m=m,
+#                                         g_constraint=g_constraint,
+#                                         rng=fixed_uniform_midpoint)
+#     computed_1 = hu.sample_analytical_function(u=u,
+#                                         process_generator=linear_process_fixture,
+#                                         test_domain=fixed_test_domain_1d,
+#                                         num_of_spatial_sampling_m=m,
+#                                         rng=fixed_uniform_midpoint)
+#     assert np.all(computed == 1), f"w_g:{computed}, no_g:{computed_1}"
+# def test_sample_analytical_function_5(quadratic_process_fixture, fixed_test_domain_2d, fixed_u_2d):
+#     m = 10
+#     computed = hu.sample_analytical_function(u=fixed_u_2d,
+#                                         process_generator=quadratic_process_fixture,
+#                                         test_domain=fixed_test_domain_2d,
+#                                         num_of_spatial_sampling_m=m,
+#                                         rng=fixed_uniform_midpoint)
+#     assert np.all(computed >= fixed_u_2d[1])
+
+# @pytest.mark.parametrize("domain", [np.array([[0.0, 1.0]]), np.array([[0.0, 1.0], [0.0, 1.0]]), np.array([[0.0, 1.0], [-1.0, 1.0], [2.0, 3.0]]),])
+# def test_sample_analytical_function_6(linear_process_fixture, domain):
+#     u = np.array([1.0, 2.0])
+#     computed = hu.sample_analytical_function(u=u,
+#                                     process_generator=linear_process_fixture,
+#                                     test_domain=domain,
+#                                     num_of_spatial_sampling_m=5,
+#                                     rng=fixed_uniform_midpoint)
+#     assert computed.shape == (5,)
+# def test_sample_analytical_function_7():
+#     with pytest.raises(TypeError):
+#         hu.sample_analytical_function(u=np.array([1.0, 2.0]), 
+#                                     process_generator=None)
+# def test_sample_analytical_function_8(linear_process_fixture, fixed_test_domain_1d):
+#     u = np.array([1.0, 2.0])
+#     m=0
+#     computed = hu.sample_analytical_function(u=u,
+#                                     process_generator=linear_process_fixture,
+#                                     test_domain=fixed_test_domain_1d,
+#                                     num_of_spatial_sampling_m=m)
+#     assert computed.size == 0
+#-------------------------------
+# test_sample_analytical_function_ishigami
+#-------------------------------
+def test_sample_analytical_function_ishigami_1():
+    u = np.array([1, 1])
+    test_domain = np.array([[-1,1]])
+    m = 3
+    computed = hu.sample_analytical_function(u=u,
+                                    process_generator=gen_ishigami,
+                                    test_domain=test_domain,
+                                    num_of_spatial_sampling_m=m,
+                                    rng=fixed_uniform_linspace)
+    expected = np.array([5.882132011203685, 5.797984912722895, 5.882132011203685])
+    assert np.allclose(computed, expected)
+def test_sample_analytical_function_ishigami_2():
+    u = np.array([-2, 2])
+    test_domain = np.array([[-3,3]])
+    m = 9
+    computed = hu.sample_analytical_function(u=u,
+                                    process_generator=gen_ishigami,
+                                    test_domain=test_domain,
+                                    num_of_spatial_sampling_m=m,
+                                    rng=fixed_uniform_linspace)
+    expected = np.array([-2.486853911091064, 2.548025395648797, 4.418123423866458,
+                        4.849684507301303, 4.8784552461969595, 4.849684507301303,
+                        4.418123423866458, 2.548025395648797, -2.486853911091064])
+    assert np.allclose(computed, expected)
+def test_sample_analytical_function_ishigami_3():
+    u = np.array([1, 1])
+    test_domain = np.array([[-1,1]])
+    g_constraint = 10
+    m = 3
+    computed = hu.sample_analytical_function(u=u,
+                                    process_generator=gen_ishigami,
+                                    test_domain=test_domain,
+                                    num_of_spatial_sampling_m=m,
+                                    g_constraint=g_constraint,
+                                    rng=fixed_uniform_linspace)
+    expected = np.array([1, 1, 1])
+    assert np.array_equal(computed, expected)
+def test_sample_analytical_function_ishigami_4():
+    u = np.array([1, 1])
+    test_domain = np.array([[-1,1]])
+    g_constraint = 0
+    m = 3
+    computed = hu.sample_analytical_function(u=u,
+                                    process_generator=gen_ishigami,
+                                    test_domain=test_domain,
+                                    num_of_spatial_sampling_m=m,
+                                    g_constraint=g_constraint,
+                                    rng=fixed_uniform_linspace)
+    expected = np.array([0, 0, 0])
+    assert np.array_equal(computed, expected)
+def test_sample_analytical_function_ishigami_5():
+    u = np.array([-2, 2])
+    test_domain = np.array([[-3,3]])
+    g_constraint = 0
+    m = 9
+    computed = hu.sample_analytical_function(u=u,
+                                    process_generator=gen_ishigami,
+                                    test_domain=test_domain,
+                                    num_of_spatial_sampling_m=m,
+                                    g_constraint=g_constraint,
+                                    rng=fixed_uniform_linspace)
+    expected = np.array([1, 0, 0, 0, 0, 0, 0, 0, 1])
+    assert np.array_equal(computed, expected)
+#-------------------------------
+# test_sample_analytical_function_fellmann
+#-------------------------------
+def test_sample_analytical_function_fellmann_1():
+    u = np.array([-2, 2])
+    test_domain = np.array([[-3,3], [2, 2]])
+    m = 5
+    computed = hu.sample_analytical_function(u=u,
+                                    process_generator=gen_fellmann,
+                                    test_domain=test_domain,
+                                    num_of_spatial_sampling_m=m,
+                                    rng=fixed_uniform_linspace)
+    expected = np.array([6.0, 12.75, 15.0, 12.75, 6.0])
+    assert np.allclose(computed, expected)
+def test_sample_analytical_function_fellmann_2():
+    u = np.array([-4, 3])
+    test_domain = np.array([[3, 3], [-5, 5]])
+    m = 20
+    computed = hu.sample_analytical_function(u=u,
+                                    process_generator=gen_fellmann,
+                                    test_domain=test_domain,
+                                    num_of_spatial_sampling_m=m,
+                                    rng=fixed_uniform_linspace)
+    expected = np.array([-22.0, -19.36842105263158, -16.736842105263158, -14.105263157894736,
+            -11.473684210526315, -8.842105263157897, -6.210526315789473, -3.578947368421053,
+            -0.9473684210526336, 1.6842105263157876, 4.315789473684208, 6.947368421052628,
+            9.578947368421053, 12.210526315789473, 14.842105263157894, 17.473684210526315,
+            20.105263157894733, 22.736842105263158, 25.368421052631575, 28.0])
+    assert np.allclose(computed, expected)
+def test_sample_analytical_function_fellmann_3():
+    u = np.array([-2, 2])
+    g_constraint = 20
+    test_domain = np.array([[-3,3], [2, 2]])
+    m = 5
+    computed = hu.sample_analytical_function(u=u,
+                                    process_generator=gen_fellmann,
+                                    test_domain=test_domain,
+                                    num_of_spatial_sampling_m=m,
+                                    g_constraint=g_constraint,
+                                    rng=fixed_uniform_linspace)
+    expected = np.array([1, 1, 1, 1, 1])
+    assert np.array_equal(computed, expected)
+def test_sample_analytical_function_fellmann_4():
+    u = np.array([-2, 2])
+    g_constraint = 0
+    test_domain = np.array([[-3,3], [2, 2]])
+    m = 5
+    computed = hu.sample_analytical_function(u=u,
+                                    process_generator=gen_fellmann,
+                                    test_domain=test_domain,
+                                    num_of_spatial_sampling_m=m,
+                                    g_constraint=g_constraint,
+                                    rng=fixed_uniform_linspace)
+    expected = np.array([0, 0, 0, 0, 0])
+    assert np.array_equal(computed, expected)

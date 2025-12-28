@@ -1,6 +1,6 @@
 from kbsa.utils_kbsa import _get_u_indexSuperset_oneHot
 from dolfin import MPI as dolfin_MPI
-from auxiliary_utils.file_management import make_directory, write_to_textfile
+from auxiliary_utils.io_management import make_directory, write_to_textfile
 from auxiliary_utils.mpi_management import get_per_rank_padded_indices, get_total_num_of_padding
 from data_generation_scripts.cdr import cdr_experiment
 import argparse
@@ -38,7 +38,7 @@ def main():
         if total_num_of_padding_pre > 0:
             print(f"!----------!----------!\nPadding needed for MPI!\n>{total_num_of_padding_pre}< extra simulations will be run.\n!----------!----------!")
 
-        parent_directory, parent_uid = make_directory(directory='data/experiment_data',
+        parent_directory, parent_uid = make_directory(directory='data/experiment_data/cdr/hsic',
                                                     with_uid=True,
                                                     with_datetime=True, 
                                                     return_new_directory=True, 

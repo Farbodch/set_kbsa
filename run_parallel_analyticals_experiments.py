@@ -1,5 +1,5 @@
 from data_generation_scripts.analytical_models import analytical_models_experiment
-from auxiliary_utils.file_management import make_directory, write_to_textfile
+from auxiliary_utils.io_management import make_directory, write_to_textfile
 from numpy import (pi as np_pi, floor as np_floor)
 import argparse
 

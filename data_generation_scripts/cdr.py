@@ -3,9 +3,13 @@ from kbsa.model_generators import get_CDR
 from numeric_models.numeric_models_utils import generate_data
 from numpy import (array as np_arr, save as np_save)
 from dolfin import XDMFFile, Mesh, MPI as dolfin_MPI
-from auxiliary_utils.file_management import make_directory, write_to_textfile
+from auxiliary_utils.io_management import make_directory, write_to_textfile
 
-def cdr_experiment(u_indexSuperset_oneHot, cdr_params, mpi_rank, parent_directory):
+def cdr_experiment(u_indexSuperset_oneHot, 
+                   cdr_params, mpi_rank, 
+                   parent_directory, 
+                   make_directory_with_uid: bool=True,
+                   make_directory_with_datetime: bool=False):
     """
     we're sampling the random-inputs here (save to u_sampled), 
     then define a generator by calling f=get_CDR(), 
@@ -21,8 +25,8 @@ def cdr_experiment(u_indexSuperset_oneHot, cdr_params, mpi_rank, parent_director
     fenics_comm = dolfin_MPI.comm_self
 
     local_directory, local_uid = make_directory(directory=parent_directory,
-                                                with_uid=True,
-                                                with_datetime=False, 
+                                                with_uid=make_directory_with_uid,
+                                                with_datetime=make_directory_with_datetime, 
                                                 return_new_directory=True, 
                                                 return_uid=True)
 

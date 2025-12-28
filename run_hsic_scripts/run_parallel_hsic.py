@@ -22,9 +22,25 @@ def main():
     comm = dolfin_MPI.comm_world
     rank = comm.Get_rank()
     size = comm.Get_size()
+    # mesh_directory = 'data/CDR/mesh_save_dir/rectangle.xdmf'
     valid_cdr_fields = ['fuel_field', 'oxygen_field', 'product_field', 'temp_field']
+    # fem_process_settings: dict={'fem_mesh_directory': 'data/CDR/mesh_save_dir/rectangle.xdmf',
+                                # 'field_of_interest': valid_cdr_fields[1]}
+    # field_of_interest = valid_cdr_fields[1]
+    # data_directory = "data/experiment_data"
+    # test_domain = np_array([[0.5, 0.15],[0.2, 0.3]])
+    # u_domain_specs = [{'distribution_type': 'log_uniform', 'min': 5.5e11, 'max': 1.5e12},
+    #                 {'distribution_type': 'log_uniform', 'min': 1.5e3, 'max': 9.5e3},
+    #                 {'distribution_type': 'uniform', 'min': 850, 'max': 1000},
+    #                 {'distribution_type': 'uniform', 'min': 200, 'max': 400},
+    #                 {'distribution_type': 'uniform', 'min': 0.5, 'max': 1.5}]
+    # key_map_2d_cdr = {'10000': 'A', 
+    #                 '01000': 'E',
+    #                 '00100': 'T_i',
+    #                 '00010': 'T_o',
+    #                 '00001': 'phi'}
     process_model_name = '2d_cdr'
-    process_settings={'2d_cdr': {'data_directory': 'data/experiment_data/cdr/hsic',
+    process_settings={'2d_cdr': {'data_directory': 'data/experiment_data/cdr',
                                 'fem_mesh_directory': 'data/CDR/mesh_save_dir/rectangle.xdmf',
                                 'u_domain_specifications': [{'distribution_type': 'log_uniform', 'min': 5.5e11, 'max': 1.5e12},
                                                             {'distribution_type': 'log_uniform', 'min': 1.5e3, 'max': 9.5e3},
@@ -34,22 +50,21 @@ def main():
                                 'u_one_hot_key_map': {'10000': 'A', '01000': 'E', '00100': 'T_i', '00010': 'T_o', '00001': 'phi'},
                                 'test_domain': np_array([[0.5, 0.15],[0.2, 0.3]]),
                                 'g_constraint': 700,
-                                'field_of_interest': valid_cdr_fields[3]}}
-    
-    n = 40
-    m = 100
+                                'field_of_interest': valid_cdr_fields[1]}}
+    # g_constraint = 700
+    n = 10
+    m = 20
     shuffle_inputs = True
 
-    # if size > 1:
-    parallelize_flag = True
-    # else:
-        # parallelize_flag = False
+    if size > 1:
+        parallelize_flag = True
+    else:
+        parallelize_flag = False
     # data_dir_indices = None
     binary_system_output_data = None
     input_data_dirs_list_to_use = None
     field_data_dirs_list_to_use = None
     u_arr = None
-    
     if parallelize_flag:
         if rank == 0:
             num_of_u_inputs = len(process_settings[process_model_name]['u_domain_specifications'])
@@ -141,9 +156,6 @@ def main():
         parent_folder = f"data/hsic_results/{parent_uid}"
         makedirs(parent_folder, exist_ok=True)
         with open(f"{parent_folder}/meta_data.txt", 'w') as f:
-                field_of_interest = process_settings[process_model_name]['field_of_interest']
-                test_domain = process_settings[process_model_name]['test_domain']
-                g_constraint = process_settings[process_model_name]['g_constraint']
                 f.write(f'parent_uid_{parent_uid};\nnum_of_outer_loop_sampling_n:{n};\nnum_of_inner_loop_samplings_m{m};\nfield_of_interest:{field_of_interest};\ntest_domain:{test_domain};\ng_constraint:{g_constraint};\ndata_shuffle:{shuffle_inputs};')
         with open(f"{parent_folder}/results.txt", 'w') as f:
             f.write(f'{hsic_results}')

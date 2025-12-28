@@ -1,10 +1,7 @@
-
-
-
-def get_padding_for_hsic(n: int=1, 
+def adjust_sampling_number_for_hsic(n: int=1, 
                 n_max: int=1, 
                 size: int=1, 
-                verbose: bool=True):
+                verbose: bool=True) -> int:
     
     n_padded_up = n + (size-n%size)
     n_padded_down = n - (n%size)

@@ -1,6 +1,6 @@
 from numeric_models.numeric_models_utils import generate_data
 from numpy import (save as np_save, zeros as np_zeros)
-from auxiliary_utils.file_management import make_directory, write_to_textfile
+from auxiliary_utils.io_management import make_directory, write_to_textfile
 from time import time as timetime
 
 def analytical_models_experiment(u_domain_specs: list, 
