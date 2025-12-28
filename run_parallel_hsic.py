@@ -36,8 +36,8 @@ def main():
                                 'g_constraint': 700,
                                 'field_of_interest': valid_cdr_fields[3]}}
     
-    n = 40
-    m = 100
+    n = 10000
+    m = 20000
     shuffle_inputs = True
 
     # if size > 1:
@@ -60,40 +60,16 @@ def main():
                                                                                    return_directories=True,
                                                                                    adjust_for_mpi=True,
                                                                                    mpi_size=size)
-            # input_data_dirs_list = get_data_file_directories(data_directory, data_type='input_data')
+           
             n = len(u_arr)
-            # n = adjust_sampling_number_for_hsic(n=n,
-            #                                     n_max=n_max,
-            #                                     size=size,
-            #                                     verbose=True,)
-            # n_padded_up = n + (size-n%size)
-            # n_padded_down = n - (n%size)
-            # if n_padded_up > n_max:
-            #     print(f'Using {n-n_padded_down} less data points to ensure MPI parallelization. Need {n_padded_up} data points at the next parallelization increment using {size} MPI tasks/core.')
-            #     n = n_padded_down
-            # else:
-            #     print(f'Using {n_padded_up-n} extra data points to ensure MPI parallelization.')
-            #     n = n_padded_up
-          
-            # data_dir_indices = np_arange(0, n_max)
-            # if shuffle_inputs:
-            #     np_shuffle(data_dir_indices)
-
-            # data_dir_indices = data_dir_indices[:n]
-            # input_data_dirs_list_to_use = [input_data_dirs_list[i] for i in data_dir_indices[:n]]
-            ##HERE!!
             field_data_dirs_list_to_use = [dir.replace('input_data.npy', process_settings[process_model_name]['field_of_interest']) for dir in input_data_dirs_list_to_use]
         u_arr = comm.bcast(u_arr, root=0)
-        # input_data_dirs_list_to_use = comm.bcast(input_data_dirs_list_to_use, root=0)
         field_data_dirs_list_to_use = comm.bcast(field_data_dirs_list_to_use, root=0)
         n = comm.bcast(n, root=0)
-        # n = len(data_dir_indices)
-        
         max_jobs = (n + size - 1) // size 
         indices = range(rank, n, size)
         num_of_padded_runs_in_curr_rank = 0
         while len(indices) < max_jobs:
-            # indices.append(None)
             num_of_padded_runs_in_curr_rank += 1
         assert num_of_padded_runs_in_curr_rank==0
         
@@ -119,17 +95,6 @@ def main():
                     binary_system_output_data[i] = results
         comm.barrier()
     if rank==0:
-        # hsic_results = hsic(data_directory=data_directory,
-        #                     fem_process_settings=fem_process_settings,
-        #                     n=n,
-        #                     num_of_spatial_sampling_m=m,
-        #                     # test_domain=test_domain,
-        #                     u_domain_specifications=u_domain_specs,
-        #                     g_constraint=g_constraint,
-        #                     # shuffle_inputs=shuffle_inputs,
-        #                     u_one_hot_key_map=key_map_2d_cdr,
-        #                     binary_system_output_data=binary_system_output_data,
-        #                     input_data_dirs_to_use_parall_processed=input_data_dirs_list_to_use)
         hsic_results = hsic(u_domain_specifications=process_settings[process_model_name]['u_domain_specifications'],
                         u_one_hot_key_map=process_settings[process_model_name]['u_one_hot_key_map'],
                         binary_system_output_data=binary_system_output_data,
