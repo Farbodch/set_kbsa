@@ -1,5 +1,6 @@
 name: set_kbsa
 channels:
+  - https://software.repos.intel.com/python/condac
   - conda-forge
 dependencies:
   - python=3.10.14
@@ -27,5 +28,5 @@ dependencies:
   - ipympl=0.9.6
   - ipython=8.30.0
   - ipywidgets=8.1.5
-
+  - libglu=9.0.3
   - pytest=8.2.2

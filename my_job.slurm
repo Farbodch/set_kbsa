@@ -18,7 +18,8 @@
 
 module load slurm_setup
 module load mpi
-source /dss/dsshome1/02/ge94nas3/.conda_init
+# source /dss/dsshome1/02/ge94nas3/.conda_init
+source /dss/lrzsys/sys/spack/release/24.4.0/opt/x86_64/miniconda3/24.7.1-gcc-t6x7erm/etc/profile.d/conda.sh
 conda activate set_kbsa
 
 mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_cdr_experiments.py --N 5000
