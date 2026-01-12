@@ -3,11 +3,11 @@ from utils.numeric_models import model
 from utils.other_utils import getIndexSuperset, getIndexComplement, directBinStrSum, get_x_boundary_indices_on_1D_FEM_mesh
 
 def _getSobolIdx_clos(model, 
-                      indexSet, 
-                      N, 
-                      scalarDiffuIdx=0, 
-                      x_interval_of_interest=None,
-                      COMMENT=False):
+                    indexSet, 
+                    N, 
+                    scalarDiffuIdx=0, 
+                    x_interval_of_interest=None,
+                    COMMENT=False):
 
     """Calculate Sobol index for a given subset and sample count."""
     inputSize = len(indexSet)

@@ -110,7 +110,7 @@ def _get_direct_sums(data_array: NDArray, axis=1) -> NDArray:
     return data_array.sum(axis=axis) 
 @njit(parallel=True)
 def _get_gram_matrix(binary_data_array: NDArray, 
-                     popcount_8bit=None) -> NDArray:
+                    popcount_8bit=None) -> NDArray:
     """
     input: nxm ndarray -> output: pairwise AND count /w output shape (n,n)
     effectly, performing binary_data_array @ binary_data_array.T    
@@ -229,8 +229,8 @@ def get_K_gamma(process_type: str = 'fenics_function',
             lambda_X *= lambda_curr_dom
     if verbose: t1_0 = time_ns()
     lambda_matrix = approximate_set_lebesgue(binary_system_output_data=binary_system_output_data, 
-                                             lambda_X=lambda_X,
-                                             with_popcount=with_popcount)
+                                                lambda_X=lambda_X,
+                                                with_popcount=with_popcount)
     if verbose: t1_1 = time_ns()
     sigma_squared = np_mean(lambda_matrix)
     if verbose: t2_1 = time_ns()

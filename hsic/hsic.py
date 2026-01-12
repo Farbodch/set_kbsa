@@ -47,6 +47,7 @@ def hsic(data_directory: str | None = None,
         vectorized_K_U_flag: bool = True,
         hsic_control_method_flag: bool = False,
         verbose_K_gamma: bool = False):
+    
     if process_type == 'fenics_function':
         fem_mesh_directory = fem_process_settings['fem_mesh_directory']
         field_of_interest = fem_process_settings['field_of_interest']
@@ -84,7 +85,7 @@ def hsic(data_directory: str | None = None,
             u_arr = get_input_data_from_file_analytical(data_directory=data_directory,
                                                         num_of_u_inputs=num_of_u_inputs,
                                                         n=n,
-                                                        return_directories=return_directories)
+                                                        return_directories=False)
     n = u_arr.shape[0]
     print(f'Using {n} data points.')
     u_arr_transformed = transform_all_u_inputs(u_arr=u_arr, u_domain_specifications=u_domain_specifications)

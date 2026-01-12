@@ -5,11 +5,11 @@ from numpy import (array as np_arr, save as np_save)
 from dolfin import XDMFFile, Mesh, MPI as dolfin_MPI
 from auxiliary_utils.io_management import make_directory, write_to_textfile
 
-def cdr_experiment(u_indexSuperset_oneHot, 
-                   cdr_params, mpi_rank, 
-                   parent_directory, 
-                   make_directory_with_uid: bool=True,
-                   make_directory_with_datetime: bool=False):
+def cdr_hsic_experiment(u_indexSuperset_oneHot, 
+                        cdr_params, mpi_rank, 
+                        parent_directory, 
+                        make_directory_with_uid: bool=True,
+                        make_directory_with_datetime: bool=False):
     """
     we're sampling the random-inputs here (save to u_sampled), 
     then define a generator by calling f=get_CDR(), 
