@@ -19,6 +19,12 @@ from numeric_models.analytic_models import ishigami_vectorized_generator as gen_
 from numba.core.registry import CPUDispatcher
 from types import FunctionType
 
+
+""" 
+LEFT TO DO:
+    Read-in data from file & sampling Both with-MPI and without-MPI
+    Test-cases (most important -> consistancy between einsumed, vectorized, and looped.)
+"""
 def vecSob(data_directory: str | None = None,
         n: int = 10,
         num_of_grid_points: int | None = None,

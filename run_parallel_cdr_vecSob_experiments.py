@@ -1,4 +1,4 @@
-from auxiliary_utils.index_management import order_r_idx_as_onehot_generator
+from auxiliary_utils.index_management import generator_order_r_idcs_as_onehot
 from dolfin import MPI as dolfin_MPI
 from auxiliary_utils.io_management import make_directory, write_to_textfile
 from auxiliary_utils.mpi_management import get_per_rank_padded_indices, get_total_num_of_padding
@@ -32,13 +32,13 @@ def main():
                 'g_ineq_c': {'fuel': 0.02, 'oxygen': 0.14, 'product': 0.014, 'temp': 900}}
     
     #all workers need to have access to this
-    index_set_to_calculate = [idx for idx in order_r_idx_as_onehot_generator(4,5)] + [idx for idx in order_r_idx_as_onehot_generator(1,5)]
+    index_set_to_calculate = [idx for idx in generator_order_r_idcs_as_onehot(4,5)] + [idx for idx in generator_order_r_idcs_as_onehot(1,5)]
     if rank == 0:
         total_num_of_padding_pre = get_total_num_of_padding(N=N, size=size)
         if total_num_of_padding_pre > 0:
             print(f"!----------!----------!\nPadding needed for MPI!\n>{total_num_of_padding_pre}< extra simulations will be run.\n!----------!----------!")
 
-        parent_directory, parent_uid = make_directory(directory='data/experiment_data/cdr/hsic',
+        parent_directory, parent_uid = make_directory(directory='data/experiment_data/cdr/vecSob',
                                                     with_uid=True,
                                                     with_datetime=True, 
                                                     return_new_directory=True, 

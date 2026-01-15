@@ -65,16 +65,22 @@ def write_to_textfile(directory: str,
             curr_datetime = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
             f.write(f'datetime_{curr_datetime};\n')
 
-def get_data_file_directories(base_dir: str, data_type: str, process_type: str= 'cdr', return_n_max_list: bool=False):
+#NOTe: This io manager for file directories has too many hard-coded condition checks. Not usable for, e.g., comsol structures or some other filing 
+# structs with differet numbers of dirs, subdirs and subsubdirs. Change to generalize or remove redunandancy checks unless cdr or something? 
+def get_data_file_directories(base_dir: str, 
+                              data_type: str, 
+                              process_type: str='cdr', 
+                              return_n_max_list: bool=False,
+                              verbose=False,
+                              enforce_params=True):
     """
     data_type ∈ {'fuel_field', 'oxygen_field', 'product_field', 'temp_field', 'input_data'}
     Returns a list of file paths for chosen_cdr_field across all qualified sub_sub_directories.
     """
     base_dir = Path(base_dir)   
-
+    
     if data_type not in ['fuel_field', 'oxygen_field', 'product_field', 'temp_field', 'input_data']:
         raise ValueError("chosen cdr field must be one of 'fuel_field', 'oxygen_field', 'product_field', 'temp_field', 'input_data'")
-    
 
     target_filename = data_type
     if data_type in ['fuel_field', 'oxygen_field', 'product_field', 'temp_field']:
@@ -98,53 +104,69 @@ def get_data_file_directories(base_dir: str, data_type: str, process_type: str= 
         meta_file = parent / "meta_data.txt"
         if not meta_file.exists():
             num_of_parent_skips += 1
-            # print(f"Skipping {parent}: no meta_data.txt")
+            if verbose:
+                print(f"Skipping {parent}: no meta_data.txt")
             continue
         
         params = parse_meta_data(meta_file, process_type=process_type)
         if params is None:
             num_of_parent_skips += 1
-            # print(f"Skipping {parent}: could not parse params.")
+            if verbose:
+                print(f"Skipping {parent}: could not parse params.")
             continue
         
         n_max_list = []
-        if process_type == 'cdr':
-        #validate required conditions
-            if not (
-                params.get("t_end") == 0.05 and
-                params.get("num_steps") == 500 and
-                params.get("return_bool") is False
-            ):
-                num_of_parent_skips += 1
-                # print(f"Skipping {parent}: incorrect cdr_params")
-                continue
-        elif process_type == 'analytical' and return_n_max_list:
-            n_max_list.append(params["total_num_of_experiments"])
+        if enforce_params:
+            if 'cdr' in process_type:
+            #validate required conditions
+                if not (
+                    params.get("t_end") == 0.05 and
+                    params.get("num_steps") == 500 and
+                    params.get("return_bool") is False
+                ):
+                    num_of_parent_skips += 1
+                    if verbose:
+                        print(f"Skipping {parent}: incorrect cdr_params")
+                    continue
+            elif process_type == 'analytical' and return_n_max_list:
+                n_max_list.append(params["total_num_of_experiments"])
         
         #2) check subdirectories
         sub_dirs = [d for d in parent.iterdir() if d.is_dir()]
 
         #skip if parent folder has no subfolder structure
-        if process_type =='cdr':
+        if 'cdr' in process_type:
             if len(sub_dirs) == 0:
                 num_of_parent_skips += 1
-                # print(f"Skipping {parent}: no sub-directories found.")
+                if verbose:
+                    print(f"Skipping {parent}: no sub-directories found.")
                 continue
 
         for sub in sub_dirs:
             sub_subs = [d for d in sub.iterdir() if d.is_dir()]
 
-            if len(sub_subs) != 6 and process_type=='cdr':
-                num_of_sub_folder_skips += 1
-                # print(f"Skipping {parent}/{sub}: does not have 6 sub_sub-folders.")
-                continue
-            if process_type == 'cdr':
+            if 'cdr' in process_type:
+                #NOTe: This sub_sub num of sub folders check is not static for vecSob, as it can have
+                # a varying number depending on whether the required orders were created (for total vs
+                # just the closed Sob indices). As such, a static folder cardinality check does not work here.
+                if len(sub_subs) != 6 and process_type == 'cdr':
+                    num_of_sub_folder_skips += 1
+                    if verbose:
+                        print(f"Skipping {parent}/{sub}: does not have 6 sub_sub-folders.")
+                    continue
+
                 #3)check inside each sub_sub_directory for exactly 10 files
                 for sub_sub in sub_subs:
                     files = [f for f in sub_sub.iterdir() if f.is_file()]
-                    if len(files) != 10 and process_type == 'cdr':
+                    if len(files) != 10 and Path(sub_sub).name != 'u_III':
                         num_of_sub_sub_folder_skips += 1
-                        # print(f"Skipping {parent}/{sub}/{sub_sub}: does not contain 9 files.")
+                        if verbose:
+                            print(f"Skipping {parent}/{sub}/{sub_sub}: does not contain the expected 10 files.")
+                        continue
+                    elif len(files) != 2 and Path(sub_sub).name == 'u_III':
+                        num_of_sub_sub_folder_skips += 1
+                        if verbose:
+                            print(f"Skipping {parent}/{sub}/{sub_sub}: does not contain the expected 2 files.")
                         continue
 
                     #4.a)collect chosen .h5 or .npy file
@@ -156,7 +178,9 @@ def get_data_file_directories(base_dir: str, data_type: str, process_type: str= 
                             collected_paths.append(str(wanted_path)[:-3])
                     else:
                         num_of_sub_sub_folder_skips += 1
-                        print(f"Warning: {wanted_path} missing.")
+                        if verbose:
+                            print(f"Warning: {wanted_path} missing.")
+
             elif process_type == 'analytical':
                 #4.b)collect chosen .h5 or .npy file
                 wanted_path = sub / target_filename
@@ -167,7 +191,8 @@ def get_data_file_directories(base_dir: str, data_type: str, process_type: str= 
                         collected_paths.append(str(wanted_path)[:-3])
                 else:
                     num_of_sub_sub_folder_skips += 1
-                    print(f"Warning: {wanted_path} missing.")
+                    if verbose:
+                        print(f"Warning: {wanted_path} missing.")
         print(f"Num_of_parent_skips: {num_of_parent_skips}")
         print(f"num_of_sub_folder_skips: {num_of_sub_folder_skips}")
         print(f"num_of_sub_sub_folder_skips: {num_of_sub_sub_folder_skips}")
@@ -183,7 +208,7 @@ def parse_meta_data(meta_file: Path, process_type: str):
     Extract and return cdr_params dict from meta_data.txt.
     """
     text = meta_file.read_text()
-    if process_type == 'cdr':
+    if 'cdr' in process_type:
     #cdr_params appear after "cdr_params_"
         start_idx = text.find("cdr_params_")
         if start_idx == -1:
