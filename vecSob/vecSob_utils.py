@@ -3,8 +3,10 @@ from dolfin import Mesh, FunctionSpace, Function, XDMFFile
 from numpy import (int32, float32, float64, uint8, fill_diagonal,
                 linspace as np_linspace,
                 array as np_array,
+                sqrt as np_sqrt,
                 asarray as np_asarray,
                 einsum as np_einsum,
+                stack as np_stack,
                 mean as np_mean,
                 zeros as np_zeros,
                 load as np_load,
@@ -58,8 +60,8 @@ def sample_fenics_function(data_directory: str,
     if num_of_grid_points is None:
         h = get_shortest_geom_mesh_dist(mesh=mesh)
         num_of_grid_points = int(2/h)
-    x_vect = np_array(list(product(*[np_linspace(test_domain[i, 0], test_domain[i, 1], num_of_grid_points) for i in range(test_domain.shape[0])])))
-
+    sqrt_num_of_grid_points = int(np_sqrt(num_of_grid_points))
+    x_vect = np_array(list(product(*[np_linspace(test_domain[i, 0], test_domain[i, 1], sqrt_num_of_grid_points) for i in range(test_domain.shape[0])])))
     field_of_interest = Path(data_directory).name
     f = Function(func_space_V)
     with XDMFFile(mesh.mpi_comm(), data_directory) as xdmf_1:
@@ -151,3 +153,22 @@ def calculate_vecSob_index_A_looped(binary_system_output_data_index_A: NDArray):
     T_A = T_A/(n-1) 
     T = T/(n-1) 
     return T_A/T
+
+def build_sorted_output_data_dict(binary_system_output_data_dict: dict) -> dict:
+    """
+    Inputs: 
+        binary_system_output_data_dict: which has the data for u_I, u_II, 
+                                        and the one-hot-encoded indices (e.g., 00001, 00010, ...).
+    Returns: 
+        sorted_output_data_dict: {one_hot_index_key: NDArray of shape (3, n, num_of_grid_points)} where each
+               dict[key].shape = (3, n, h) where [0,:,:] contains y_I, [1,:,:] contains y_II and [2,:,:] y_tilde. 
+    """
+    u_I = binary_system_output_data_dict['u_I']
+    u_II = binary_system_output_data_dict['u_II']
+    sorted_output_data_dict = {}
+    for key, arr in binary_system_output_data_dict.items():
+        if key in ('u_I', 'u_II'):
+            continue
+        stacked = np_stack([u_I, u_II, arr], axis=0)   # (3, n, num_of_grid_points)
+        sorted_output_data_dict[key] = stacked
+    return sorted_output_data_dict

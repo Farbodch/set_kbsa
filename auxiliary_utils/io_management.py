@@ -78,7 +78,7 @@ def get_data_file_directories(base_dir: str,
     Returns a list of file paths for chosen_cdr_field across all qualified sub_sub_directories.
     """
     base_dir = Path(base_dir)   
-    
+    print(base_dir)
     if data_type not in ['fuel_field', 'oxygen_field', 'product_field', 'temp_field', 'input_data']:
         raise ValueError("chosen cdr field must be one of 'fuel_field', 'oxygen_field', 'product_field', 'temp_field', 'input_data'")
 
@@ -98,6 +98,8 @@ def get_data_file_directories(base_dir: str,
     for parent in base_dir.iterdir():
         if not parent.is_dir():
             num_of_parent_skips += 1
+            if verbose:
+                print(f"Skipping {parent}: not a dir.")
             continue
         
         #1) check parent/meta_data.txt
@@ -219,7 +221,6 @@ def parse_meta_data(meta_file: Path, process_type: str):
         dict_str = dict_str[dict_str.find("{"): dict_str.rfind("}")+1]
         try:
             params = ast.literal_eval(dict_str)
-            print(params)
             return params
         except:
             print(f"Could not parse cdr_params in {meta_file}")
