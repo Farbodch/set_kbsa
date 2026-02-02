@@ -1,4 +1,5 @@
 from time import time as timetime
+#CHANGE DEPENDANCY!! CANNOT HAVE ANYTHING IMPORTING FROM kbsa. or any other older modules. -> DEPRICATE
 from kbsa.model_generators import get_CDR
 from numeric_models.numeric_models_utils import generate_data
 from numpy import (array as np_arr, save as np_save)
