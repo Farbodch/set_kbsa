@@ -8,7 +8,7 @@
 #SBATCH --clusters=inter
 #SBATCH --partition=cm4_inter
 #SBATCH --nodes=1
-#SBATCH --ntasks=50
+#SBATCH --ntasks=56
 #SBATCH --cpus-per-task=2
 #SBATCH --export=NONE
 
@@ -22,8 +22,8 @@ module load mpi
 source /dss/lrzsys/sys/spack/release/24.4.0/opt/x86_64/miniconda3/24.7.1-gcc-t6x7erm/etc/profile.d/conda.sh
 conda activate set_kbsa
 
-mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_cdr_vecSob_experiments.py --N 4000
-# mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_vecSob.py
+# mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_cdr_vecSob_experiments.py --N 4000
+mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_vecSob.py
 
 # mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_cdr_experiments.py --N 5000
 # mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_hsic.py
