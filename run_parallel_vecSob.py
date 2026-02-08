@@ -37,7 +37,7 @@ def main():
                                 'get_total_sobols': True}}
     
     n = 10000
-    num_of_grid_points = 20164 #should be power of the num of dimensions
+    num_of_grid_points = 10000 #should be power of the num of dimensions
     shuffle_inputs = True
     parallelize_flag = True
     binary_system_output_data = None

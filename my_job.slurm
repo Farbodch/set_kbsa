@@ -4,12 +4,12 @@
 #SBATCH --error=/dss/dsshome1/02/ge94nas3/projects/set_kbsa/slurm_out/vecSob_data/%x.%j.%N.err
 #SBATCH --job-name="cdr_vecSob_experiments"
 
-#SBATCH --time=24:00:00
+#SBATCH --time=08:00:00
 #SBATCH --clusters=inter
-#SBATCH --partition=teramem_inter
+#SBATCH --partition=cm4_inter
 #SBATCH --nodes=1
-#SBATCH --ntasks=48
-#SBATCH --cpus-per-task=2
+#SBATCH --ntasks=37
+#SBATCH --cpus-per-task=3
 #SBATCH --export=NONE
 
 #SBATCH --mail-user=f.chamanian@tum.de
