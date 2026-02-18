@@ -1,6 +1,5 @@
 from time import time as timetime
-#CHANGE DEPENDANCY!! CANNOT HAVE ANYTHING IMPORTING FROM kbsa. or any other older modules. -> DEPRICATE
-from kbsa.model_generators import get_CDR
+from numeric_models.pde_models import get_CDR
 from numeric_models.numeric_models_utils import generate_data
 from numpy import (int8, array as np_arr, save as np_save, where as np_where)
 from dolfin import XDMFFile, Mesh, MPI as dolfin_MPI
@@ -112,7 +111,7 @@ def cdr_vecSob_experiment(index_set_to_calculate,
     u_I = u_all_realizations[:,0]
     u_II = u_all_realizations[:,1]
     u_III = u_all_realizations[:,2] 
-    mesh_path = cdr_params["mesh_2D_dir"]
+    mesh_path = cdr_params["mesh_directory"]
     _run_experiment(cdr_params = cdr_params, 
                     u_input_idx_A=u_I, 
                     mesh_path=mesh_path, 

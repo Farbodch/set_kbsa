@@ -29,7 +29,7 @@ def gen_fen_dict(x_samples_arr, index_superset, gamma_fen='toy_1', params={'g_in
 def get_FEM_fen(gamma_fen='1D_diffu_FEM', params={'P': 3, 'mu': 1, 'std': 5, 'meshInterval': 128}):
     if gamma_fen == '1D_diffu_FEM':
         return get_1D_diff_FEM(params=params)
-def get_cdr_fen(params={'mesh_2D_dir': '', 'mesh_steps': 0, 't_end': 1, 'num_steps':10, 'g_ineq_c': {'fuel': 1, 'oxygen': 1, 'product': 1, 'temp': 900}}):
+def get_cdr_fen(params={'mesh_directory': '', 'mesh_steps': 0, 't_end': 1, 'num_steps':10, 'g_ineq_c': {'fuel': 1, 'oxygen': 1, 'product': 1, 'temp': 900}}):
     return get_CDR(params=params)
 
 def gen_mass_evaluator(fens):

@@ -1,4 +1,5 @@
-data
+data/*
+!data/mesh_data
 figs
 fig
 .ipynb_checkpoints/
@@ -6,3 +7,4 @@ kbsa/__pycache__/
 utils/__pycache__/
 slurm_out
 .DS_Store
+__pycache__/

@@ -1,3 +1,18 @@
+#–----------------------------
+# make this script visible to system
+# and rest of the package visible
+# to this script
+#–----------------------------
+from os import path as os_path
+from sys import path as sys_path
+script_dir = os_path.dirname(os_path.abspath(__file__))
+scripts_bin_dir = os_path.dirname(script_dir)
+project_root_dir = os_path.dirname(scripts_bin_dir)
+sys_path.insert(0, project_root_dir)
+
+#–----------------------------
+# import dependencies
+#–----------------------------
 from data_generation_scripts.analytical_models import analytical_models_experiment
 from auxiliary_utils.io_management import make_directory, write_to_textfile
 from numpy import (pi as np_pi, floor as np_floor)

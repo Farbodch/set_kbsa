@@ -71,19 +71,21 @@ def get_data_file_directories(base_dir: str,
                               data_type: str, 
                               process_type: str='cdr', 
                               return_n_max_list: bool=False,
-                              verbose=False,
+                              verbose=True,
                               enforce_params=True):
     """
-    data_type ∈ {'fuel_field', 'oxygen_field', 'product_field', 'temp_field', 'input_data'}
+    data_type ∈ {'fuel_field', 'oxygen_field', 'product_field', 'temp_field', 'input_data', 'diffusion_field'}
     Returns a list of file paths for chosen_cdr_field across all qualified sub_sub_directories.
     """
+
+    '''TO DO: IMPORTANT REFACTOR -> MAKE ACCEPTABLE data_type AGNOSTIC AND NOT HARDCODED -> MAYBE RELY ON THE SETTINGS FILE?'''
     base_dir = Path(base_dir)   
     print(base_dir)
-    if data_type not in ['fuel_field', 'oxygen_field', 'product_field', 'temp_field', 'input_data']:
-        raise ValueError("chosen cdr field must be one of 'fuel_field', 'oxygen_field', 'product_field', 'temp_field', 'input_data'")
+    if data_type not in ['fuel_field', 'oxygen_field', 'product_field', 'temp_field', 'input_data', 'diffusion_field']:
+        raise ValueError("chosen cdr field must be one of 'fuel_field', 'oxygen_field', 'product_field', 'temp_field', 'input_data', 'diffusion_field'")
 
     target_filename = data_type
-    if data_type in ['fuel_field', 'oxygen_field', 'product_field', 'temp_field']:
+    if data_type in ['fuel_field', 'oxygen_field', 'product_field', 'temp_field', 'diffusion_field']:
         target_filename += '.h5'
     else:
         target_filename += '.npy'
@@ -118,6 +120,9 @@ def get_data_file_directories(base_dir: str,
             continue
         
         n_max_list = []
+        ''' TO DO : These enforce_params values are arbitrary and need to be set in a higher-level settings file
+                    by user, but now just check to enforce some abitrary values for this specific paper and 
+                    simply fails to read in anything else.'''
         if enforce_params:
             if 'cdr' in process_type:
             #validate required conditions
@@ -125,6 +130,17 @@ def get_data_file_directories(base_dir: str,
                     params.get("t_end") == 0.05 and
                     params.get("num_steps") == 500 and
                     params.get("return_bool") is False
+                ):
+                    num_of_parent_skips += 1
+                    if verbose:
+                        print(f"Skipping {parent}: incorrect cdr_params")
+                    continue
+            
+            elif 'diffusion_1d' in process_type:
+                P = params.get("P")
+                if not (
+                    P == 3 and
+                    params.get("meshInterval") == 128
                 ):
                     num_of_parent_skips += 1
                     if verbose:
@@ -195,6 +211,36 @@ def get_data_file_directories(base_dir: str,
                     num_of_sub_sub_folder_skips += 1
                     if verbose:
                         print(f"Warning: {wanted_path} missing.")
+            elif 'diffusion_1d' in process_type:
+                #NOTe: This sub_sub num of sub folders check is not static for vecSob, as it can have
+                # a varying number depending on whether the required orders were created (for total vs
+                # just the closed Sob indices). As such, a static folder cardinality check does not work here.
+                if len(sub_subs) != P+1:
+                    num_of_sub_folder_skips += 1
+                    if verbose:
+                        print(f"Skipping {parent}/{sub}: does not have {P+1} sub_sub-folders.")
+                    continue
+
+                #3)check inside each sub_sub_directory for exactly 10 files
+                for sub_sub in sub_subs:
+                    files = [f for f in sub_sub.iterdir() if f.is_file()]
+                    if len(files) != 4:
+                        num_of_sub_sub_folder_skips += 1
+                        if verbose:
+                            print(f"Skipping {parent}/{sub}/{sub_sub}: does not contain the expected 4 files.")
+                        continue
+
+                    #4.a)collect chosen .h5 or .npy file
+                    wanted_path = sub_sub / target_filename
+                    if wanted_path.exists():
+                        if data_type == 'input_data':
+                            collected_paths.append(str(wanted_path))
+                        else:
+                            collected_paths.append(str(wanted_path)[:-3])
+                    else:
+                        num_of_sub_sub_folder_skips += 1
+                        if verbose:
+                            print(f"Warning: {wanted_path} missing.")
         print(f"Num_of_parent_skips: {num_of_parent_skips}")
         print(f"num_of_sub_folder_skips: {num_of_sub_folder_skips}")
         print(f"num_of_sub_sub_folder_skips: {num_of_sub_sub_folder_skips}")
@@ -209,6 +255,8 @@ def parse_meta_data(meta_file: Path, process_type: str):
     """
     Extract and return cdr_params dict from meta_data.txt.
     """
+
+    '''TO DO: REFACTOR TO USE model_params FOR ALL MODELS, NOT cdr_params_ and etc.'''
     text = meta_file.read_text()
     if 'cdr' in process_type:
     #cdr_params appear after "cdr_params_"
@@ -225,6 +273,21 @@ def parse_meta_data(meta_file: Path, process_type: str):
         except:
             print(f"Could not parse cdr_params in {meta_file}")
             return None
+    elif 'diffusion_1d' in process_type:
+    #model_params appear after "model_params_"
+        start_idx = text.find("model_params_")
+        if start_idx == -1:
+            return None
+        start_idx += len("model_params_")
+        #extract param dictionary content between '{' and '}'
+        dict_str = text[start_idx:].strip()
+        dict_str = dict_str[dict_str.find("{"): dict_str.rfind("}")+1]
+        try:
+            params = ast.literal_eval(dict_str)
+            return params
+        except:
+            print(f"Could not parse model_params in {meta_file}")
+            return None
     elif process_type == 'analytical':
         meta_data = {}
         match = re_search(r"total_num_of_experiments_(\d+)", text)
@@ -237,7 +300,7 @@ def parse_meta_data(meta_file: Path, process_type: str):
     else:
         raise ValueError("This should not be reached.")
 
-def load_mesh(mesh_dir: str = "data/CDR/mesh_save_dir/rectangle.xdmf"):
+def load_mesh(mesh_dir: str = "data/mesh_data/cdr/rectangle.xdmf"):
     fenics_comm = dolfin_MPI.comm_self
     mesh = Mesh(fenics_comm)
     with XDMFFile(fenics_comm, mesh_dir) as xdmf:
@@ -248,7 +311,7 @@ def load_function_space(mesh: Mesh, cg_order=1):
     V = FunctionSpace(mesh, 'CG', cg_order) 
     return V
 
-def load_fenics_function(field_file_path: str, mesh_dir: str="data/CDR/mesh_save_dir/rectangle.xdmf"):
+def load_fenics_function(field_file_path: str, mesh_dir: str="data/mesh_data/cdr/rectangle.xdmf"):
     """ this function takes in a path to the file where fenics function of the field_of_interest is located 
     and returns the associated "<class 'dolfin.function.function.Function'>", on a CG-1 elements. """
     field_of_interest = Path(field_file_path).name
@@ -268,10 +331,11 @@ def get_input_data_from_file_fenics_function(data_directory: Union[str, None] = 
                                             return_directories: bool = False,
                                             adjust_for_mpi: bool = False,
                                             mpi_size: int = 1,
+                                            process_type: str = 'cdr',
                                             input_data_directories_list_to_use: Union[List, None]=None) -> Union[NDArray, Tuple[NDArray, List]]:
     if input_data_directories_list_to_use is None:
         assert data_directory is not None, "Must pass in parent data_directory if no explicit input_data_directories_list_to_use is passed in."
-        input_data_dirs_list = get_data_file_directories(data_directory, data_type='input_data')
+        input_data_dirs_list = get_data_file_directories(data_directory, process_type=process_type, data_type='input_data')
         n_max = len(input_data_dirs_list)
         data_dir_indices = np_arange(0, n_max)
         if shuffle:
@@ -330,3 +394,26 @@ def get_input_data_from_file_analytical(data_directory: str,
     if return_directories:
         return u_arr, data_directories[:i]
     return u_arr
+
+def write_from_dict_to_text_file(data_to_write_dict: dict,
+                                 data_file_name: str = '',
+                                 data_parent_directory: str | None = None,
+                                 generate_new_uid: bool = False,
+                                 data_directory_with_uid: str | None = None, 
+                                 data_uid: str | None = None,
+                                 return_data_directory_with_uid: bool = False):
+    assert data_file_name != '', "data_file_name required but NOT passed in."
+    if generate_new_uid:
+        assert data_parent_directory is not None, f"When generate_new_uid is set to True, must pass in a sup_directory but now {data_parent_directory} was passed in."
+        data_uid = datetime.now().strftime("%Y_%m_%d_%H_%M_%S__") + str(uuid4().hex)
+        data_directory_with_uid = f"{data_parent_directory}/{data_uid}"
+
+    assert data_directory_with_uid is not None, "Both the directory data_directory_with_uid was passed in as None, and generate_new_uid was set to False! Need either of the two."
+    assert data_uid in data_directory_with_uid, f"Local data directory {data_directory_with_uid} should be, but is NOT being identified with UID {data_uid}."
+
+    makedirs(data_directory_with_uid, exist_ok=True)
+    with open(f"{data_directory_with_uid}/{data_file_name}.txt", 'w') as f:
+        f.write(f'data_uid_{data_uid};\n')
+        for key, val in data_to_write_dict.items():
+            f.write(f'{key}:{val};\n')
+    return data_directory_with_uid

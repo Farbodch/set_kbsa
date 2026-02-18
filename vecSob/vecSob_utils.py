@@ -29,6 +29,7 @@ from numpy import (int32, float32, float64, uint8, fill_diagonal,
                 ones as np_ones,
                 all as np_all,
                 any as np_any)
+from dolfin.cpp.mesh import MeshFunctionSizet
 from numpy.random import (uniform as np_unif)
 from numpy.typing import NDArray
 from os import path as os_path
@@ -37,8 +38,6 @@ from numba import njit, prange
 from types import FunctionType
 from typing import Union
 from time import time_ns
-# if needed, import from auxiliary_utils.index_management, DEPRICATE
-from utils.other_utils import flipStr, getIndexSuperset, directBinStrSum
 from auxiliary_utils.io_management import get_data_file_directories
 from auxiliary_utils.mesh_management import get_shortest_geom_mesh_dist
 from itertools import product
@@ -182,195 +181,19 @@ def build_sorted_output_data_dict(binary_system_output_data_dict: dict) -> dict:
         sorted_output_data_dict[key] = stacked
     return sorted_output_data_dict
 
-
-def _snap_1d_coords_to_mesh_nodes(coords_1d, lower_bound, upper_bound, mode):
-    """
-    coords_1d: 1D numpy array of mesh vertex coordinates in a dimension (global, may contain repeats)
-    interval_min, interval_max: float bounds, interval_min<=interval_max
-    mode: 'lower'|'upper'|'nearest'
-       - lower: low_s = smallest node coord >= lower_bound, high_s = largest node coord <= upper_bound
-       - upper: low_s = largest  node coord <= lower_bound, high_s = smallest node coord >= upper_bound
-       - nearest: low_s = nearest node coord to lower_bound, high_s = nearest node coord to upper_bound
-
-    Returns (low_s, high_s) snapped bounds.
-    """
-    xs = np_unique(coords_1d)
-    xs.sort()
-
-    if lower_bound > upper_bound:
-        lower_bound, upper_bound = upper_bound, lower_bound
-
-    if mode == "lower":
-        # Inside-closest: shrink interval to fit within [interval_min, interval_max]
-        candidate_min_verts = xs[xs >= lower_bound]
-        candidate_max_verts = xs[xs <= upper_bound]
-        if len(candidate_min_verts) == 0 or len(candidate_max_verts) == 0:
-            # Interval doesn't intersect node coordinates meaningfully; fallback to nearest
-            mode = "nearest"
-        else:
-            low_s = candidate_min_verts[0]
-            high_s = candidate_max_verts[-1]
-            if low_s > high_s:
-                # No node strictly inside both constraints; fallback to nearest
-                mode = "nearest"
-            else:
-                return float(low_s), float(high_s)
-
-    if mode == "upper":
-        # Outside-closest: expand interval to cover [lower_bound, upper_bound]
-        candidate_min_verts = xs[xs <= lower_bound]
-        candidate_max_verts = xs[xs >= upper_bound]
-        if len(candidate_min_verts) == 0:
-            low_s = xs[0]
-        else:
-            low_s = candidate_min_verts[-1]
-        if len(candidate_max_verts) == 0:
-            high_s = xs[-1]
-        else:
-            high_s = candidate_max_verts[0]
-        if low_s > high_s:
-            low_s, high_s = high_s, low_s
-        return float(low_s), float(high_s)
-
-    # nearest
-    low_s = xs[np_argmin(np_abs(xs - lower_bound))]
-    high_s = xs[np_argmin(np_abs(xs - upper_bound))]
-    if low_s > high_s:
-        low_s, high_s = high_s, low_s
-    return float(low_s), float(high_s)
-
-def snap_bounds_to_mesh_nodes(mesh, bounds, mode):
-    """
-    bounds: dict {dim_index: (lo, hi)}; only dims < mesh.geometry().dim() used
-    mode: 'lower'|'upper'|'nearest'
-    Returns snapped_bounds with same keys for used dims.
-
-    Uses mesh.vertex coordinates (mesh.coordinates()).
-    """
-    mesh_max_dim = mesh.geometry().dim()
-    coords = mesh.coordinates()
-    snapped = {}
-    for curr_dim, (lower_bound, upper_bound) in bounds.items():
-        if curr_dim >= mesh_max_dim:
-            continue
-        low_s, high_s = _snap_1d_coords_to_mesh_nodes(coords[:, curr_dim], lower_bound, upper_bound, mode)
-        snapped[curr_dim] = (low_s, high_s)
-    return snapped
-
-def mark_cells_by_midpoint_bounds(mesh, bounds):
-    """
-    Mark cell = 1 if its midpoint lies within the axis-aligned box defined by bounds.
-    bounds: dict {dim_index: (lower_bound, upper_bound)}.
-    """
-    mesh_max_dim = mesh.geometry().dim()
-    cell_markers = MeshFunction("size_t", mesh, mesh_max_dim)
-    cell_markers.set_all(0)
-
-    for cell in cells(mesh):
-        mid = cell.midpoint().array()
-        midpoint_flag = True
-        for curr_dim, (lower_bound, upper_bound) in bounds.items():
-            if curr_dim < mesh_max_dim and not (lower_bound <= mid[curr_dim] <= upper_bound):
-                midpoint_flag = False
-                break
-        if midpoint_flag:
-            cell_markers[cell] = 1
-    return cell_markers
-
-def mark_cells_by_nodes_bounds(mesh, bounds, policy='all'):
-    """
-    Creates a FEniCS CellFunction by marking cells based on whether their
-    vertices lie within a specified bounding box.
-
-    This provides a 'node-aligned' region.
-
-    Args:
-        mesh (Mesh): The FEniCS mesh object.
-        bounds (dict): A dictionary defining the bounding box. Keys are dimension
-                       indices (0 for x, 1 for y, 2 for z) and values are tuples (lower_bound, upper_bound).
-                       Example: {0: (0.2, 0.8), 1: (0.1, 0.4)}
-        policy (str): The rule for including a cell:
-                      - 'all': Mark the cell if ALL of its vertices are inside
-                               the bounds. This creates an "inner bound" region.
-                      - 'any': Mark the cell if AT LEAST ONE of its vertices
-                               is inside the bounds. This creates an "outer bound" region.
-    Returns:
-        MeshFunction: A cell function where cells satisfying the policy are
-                      marked with 1, and all others are marked with 0.
-    """
-    # ensure the policy is valid
-    if policy not in ['all', 'any']:
-        raise ValueError("Policy must be either 'all' or 'any'.")
-    
-    # get mesh dimension and geometry data
-    max_mesh_dim = mesh.geometry().dim()
-    all_vertex_coords = mesh.coordinates()
-    cell_to_vertex_map = mesh.cells()
-    
-    # initialize a MeshFunction to store the integer markers for each cell.
-    # the second argument is the topological dimension of the entity to be marked (cells).
-    cell_markers = MeshFunction("size_t", mesh, max_mesh_dim)
-    # default all cells to marker 0 (outside)
-    cell_markers.set_all(0)
-
-    # iterate through each cell by its index, 'cell_idx'
-    for cell_idx in range(mesh.num_cells()):
-        # get the indices of the vertices that make up this cell
-        vertex_indices_for_cell = cell_to_vertex_map[cell_idx]
-        # get the actual coordinates of these vertices
-        coords_of_cell_vertices = all_vertex_coords[vertex_indices_for_cell]
-
-        #perform the bounds check for all vertices in the cell at once:
-        # start by assuming all vertices are inside
-        is_inside_flags = np_ones(len(vertex_indices_for_cell), dtype=bool)
-        # sequentially apply the filter for each dimension in the bounds
-        for curr_dim, (lower_bound, upper_bound) in bounds.items():
-            # skip if the dimension is not relevant to the mesh
-            if curr_dim >= max_mesh_dim:
-                continue
-            # get the coordinates for the current dimension for all vertices
-            vertex_coords_in_dim = coords_of_cell_vertices[:, curr_dim]     
-            # update the flags using a vectorized boolean AND operation.
-            # a vertex is only 'still inside' if it was inside before AND it's within the bounds for the current dimension.
-            is_inside_flags &= (vertex_coords_in_dim >= lower_bound) & (vertex_coords_in_dim <= upper_bound)
-            
-        #apply the chosen policy      
-        if policy == 'all':
-            # np_all() returns True only if every element in the array is True.
-            if np_all(is_inside_flags):
-                cell_markers[cell_idx] = 1              
-        elif policy == 'any':
-            # np_any() returns True if at least one element in the array is True.
-            if np_any(is_inside_flags):
-                cell_markers[cell_idx] = 1
-                
-    return cell_markers
-
-
-def assemble_mass_matrix(V, marker=None):
-    """
-    assemble consistent mass matrix over whole domain (marker None) or subdomain.
-    """
-    u = TrialFunction(V)
-    v = TestFunction(V)
-    dx = df_Measure("dx", domain=V.mesh(), subdomain_data=marker)
-    sub_id = 1 if marker is not None else 0
-    mass_matrix = assemble(df_inner(u, v) * dx(sub_id))
-    return mass_matrix
-
-def indicator_vector_from_function(u, g_constraint):
+def indicator_vector_from_function(f, g_constraint):
     """
     Build a distributed dolfin Vector with same layout as u.vector():
-      u_indicator_i = 1 if u_i <= g_constraint else 0  (CG1 nodal dofs)
+      f_indicator_i = 1 if f_i <= g_constraint else 0  (CG1 nodal dofs)
     """
-    u_local = u.vector().get_local()
-    u_indicator_local = (u_local <= g_constraint).astype(float64)
+    f_local = f.vector().get_local()
+    f_indicator_local = (f_local <= g_constraint).astype(float64)
 
-    u_indicator = df_Vector(u.vector())
-    u_indicator.zero()
-    u_indicator.set_local(u_indicator_local)
-    u_indicator.apply("insert")
-    return u_indicator
+    f_indicator = df_Vector(f.vector())
+    f_indicator.zero()
+    f_indicator.set_local(f_indicator_local)
+    f_indicator.apply("insert")
+    return f_indicator
 
 def integrated_cov_indicator_cg1_mpi_worker(comm,
                                     V, 

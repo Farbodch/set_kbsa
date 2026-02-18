@@ -6,3 +6,4 @@ from .hsic import *
 from .vecSob import *
 from .auxiliary_utils import *
 from .data_generation_scripts import *
+from .settings import *

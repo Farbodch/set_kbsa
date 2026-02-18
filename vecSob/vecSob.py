@@ -51,14 +51,14 @@ def vecSob(data_directory: str | None = None,
         process_all_order_one_indices: bool = False, #maybe instead of this, can send in which_order numbers instead?
         input_data_dirs_to_use_parall_processed=None,
         process_type: str = 'fenics_function',
-        fem_process_settings: dict={'fem_mesh_directory': 'data/CDR/mesh_save_dir/rectangle.xdmf',
+        fem_process_settings: dict={'mesh_directory': 'data/mesh_data/cdr/rectangle.xdmf',
                                     'field_of_interest': 'temp_field'},
         analytical_process_settings: dict = {'process_generator': gen_ishigami}):
 
     #this exists for reading in input-data within vecSob(). Not implemented yet.
     #is it even necessary? Better to separate data-read-in and organization?
     if process_type == 'fenics_function' and binary_system_output_data_dict is None:
-        fem_mesh_directory = fem_process_settings['fem_mesh_directory']
+        mesh_directory = fem_process_settings['mesh_directory']
         field_of_interest = fem_process_settings['field_of_interest']
     
     #this is a check to ensure this function has the information of how many random-inputs the 

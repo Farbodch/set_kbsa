@@ -1,8 +1,23 @@
-from auxiliary_utils.index_management import generator_order_r_idcs_as_onehot
+#–----------------------------
+# make this script visible to system
+# and rest of the package visible
+# to this script
+#–----------------------------
+from os import path as os_path
+from sys import path as sys_path
+script_dir = os_path.dirname(os_path.abspath(__file__))
+scripts_bin_dir = os_path.dirname(script_dir)
+project_root_dir = os_path.dirname(scripts_bin_dir)
+sys_path.insert(0, project_root_dir)
+
+#–----------------------------
+# import dependencies
+#–----------------------------
+from auxiliary_utils.index_management import get_u_index_superset_onehot
 from dolfin import MPI as dolfin_MPI
 from auxiliary_utils.io_management import make_directory, write_to_textfile
 from auxiliary_utils.mpi_management import get_per_rank_padded_indices, get_total_num_of_padding
-from data_generation_scripts.cdr_vecSob import cdr_vecSob_experiment
+from data_generation_scripts.cdr_hsic import cdr_hsic_experiment
 import argparse
 
 def main():
@@ -24,7 +39,7 @@ def main():
 
     padded_indices, local_num_of_padding = get_per_rank_padded_indices(N=N, size=size, rank=rank)
 
-    cdr_params = {'mesh_2D_dir': 'data/CDR/mesh_save_dir/rectangle.xdmf', 
+    cdr_params = {'mesh_directory': 'data/mesh_data/cdr/rectangle.xdmf', 
                 't_end': cdr_t_end, #in seconds
                 'num_steps': cdr_num_steps, #time steps, in t_end/num_steps increments, e.g., 100 steps for 0.01 t_end is 0.0001s, 0.1ms
                 'return_bool': False,
@@ -32,13 +47,13 @@ def main():
                 'g_ineq_c': {'fuel': 0.02, 'oxygen': 0.14, 'product': 0.014, 'temp': 900}}
     
     #all workers need to have access to this
-    index_set_to_calculate = [idx for idx in generator_order_r_idcs_as_onehot(4,5)] + [idx for idx in generator_order_r_idcs_as_onehot(1,5)]
+    u_indexSuperset_oneHot = get_u_index_superset_onehot(dim_of_U=5, higher_order=False)
     if rank == 0:
         total_num_of_padding_pre = get_total_num_of_padding(N=N, size=size)
         if total_num_of_padding_pre > 0:
             print(f"!----------!----------!\nPadding needed for MPI!\n>{total_num_of_padding_pre}< extra simulations will be run.\n!----------!----------!")
 
-        parent_directory, parent_uid = make_directory(directory='data/experiment_data/cdr/vecSob',
+        parent_directory, parent_uid = make_directory(directory='data/experiment_data/cdr/hsic',
                                                     with_uid=True,
                                                     with_datetime=True, 
                                                     return_new_directory=True, 
@@ -48,8 +63,9 @@ def main():
         parent_uid = None
 
     parent_directory = comm.bcast(parent_directory, root=0)
-    parent_uid = comm.bcast(parent_uid, root=0)
-    local_results = [(i, cdr_vecSob_experiment(index_set_to_calculate=index_set_to_calculate,
+    parent_uid = comm.bcast(parent_uid, root=0) 
+
+    local_results = [(i, cdr_hsic_experiment(u_indexSuperset_oneHot=u_indexSuperset_oneHot,
                             cdr_params=cdr_params,
                             mpi_rank=rank, 
                             parent_directory=parent_directory)) for i in padded_indices]
@@ -67,7 +83,7 @@ def main():
         # print(all_results)
         print("Done:", len(flat), "tasks")
 
-        if len(cdr_params['mesh_2D_dir']) != 0:
+        if len(cdr_params['mesh_directory']) != 0:
             cdr_params.pop('mesh_steps')
         if not cdr_params['return_bool']:
             cdr_params.pop('g_ineq_c')

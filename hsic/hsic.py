@@ -18,6 +18,26 @@ from numeric_models.analytic_models import ishigami_vectorized_generator as gen_
 from numba.core.registry import CPUDispatcher
 from types import FunctionType
 
+'''
+TO DO: 
+    - Refactor such that hsic takes in comm_world 
+      and distribute the loop 
+      "for key in inputs_one_hot_binstrs_list_to_use[:-1]:" 
+      per worker. Implement dynamic distribution here.
+
+    - Check if gamma_matrix is passed-in or not. If yes, then affirm (assert)
+      validity (through shape maybe?), then perform HSIC calculations with it.
+      Note that since MPI implementation, each gamma_matrix will live on same 
+      physical node and cached. So it should be fast.
+
+    - If gamma_matrix is passed-in, then no need for symm-diff calculations.
+      SHOULD hsic have internal check for a integral-symm-diff flag
+      AND call the implementation? Do I need a RESET flag check manager?
+      Right now, I only CHECK if gamma_matrix is passed-in or not.
+      Should I also externalize the K_U_Dict calculation?
+
+
+'''
 def hsic(data_directory: str | None = None,
         n: int = 10, 
         num_of_spatial_sampling_m: int | None = None,
@@ -39,8 +59,9 @@ def hsic(data_directory: str | None = None,
         binary_system_output_data: NDArray | None = None,
         input_data_dirs_to_use_parall_processed=None,
         u_arr: NDArray | None = None,
+        gamma_matrix = None, #THIS SHOULD BE A PETSC.Mat OBJECT! (NumPy array better maybe?)
         process_type: str = 'fenics_function',
-        fem_process_settings: dict={'fem_mesh_directory': 'data/CDR/mesh_save_dir/rectangle.xdmf',
+        fem_process_settings: dict={'mesh_directory': 'data/mesh_data/cdr/rectangle.xdmf',
                                     'field_of_interest': 'temp_field'},
         analytical_process_settings: dict = {'process_generator': gen_ishigami},
         vectorized_hsic_flag: bool = True,
@@ -49,7 +70,7 @@ def hsic(data_directory: str | None = None,
         verbose_K_gamma: bool = False):
     
     if process_type == 'fenics_function':
-        fem_mesh_directory = fem_process_settings['fem_mesh_directory']
+        mesh_directory = fem_process_settings['mesh_directory']
         field_of_interest = fem_process_settings['field_of_interest']
     if process_type == 'analytical':
         process_generator = analytical_process_settings['process_generator']
@@ -120,9 +141,18 @@ def hsic(data_directory: str | None = None,
         m = n
     else:
         m = num_of_spatial_sampling_m
-    if binary_system_output_data is None:
+        
+    #------------------------------------
+    #perhaps I can implement MPI parallelization here too (maybe if 
+    #a flag is passed in?) for calculating K_gamma?
+    #note that currently, K_gamma calculation is done
+    #only in MPI Rank 0, as the bottleneck was found to
+    #be in PDE (or analytical model) input-output data read-in
+    #and pre-processing and NOT the K_gamma or K_U calculations.
+    #------------------------------------
+    if gamma_matrix is None and binary_system_output_data is None:
         if process_type == 'fenics_function':
-            my_mesh = load_mesh(mesh_dir=fem_mesh_directory)
+            my_mesh = load_mesh(mesh_dir=mesh_directory)
             V = load_function_space(my_mesh)
             process_generator = None
             u_arr = None
@@ -141,10 +171,11 @@ def hsic(data_directory: str | None = None,
                             process_generator=process_generator,
                             u_arr=u_arr)
 
-    else:
+    elif gamma_matrix is None and binary_system_output_data is not None:
         K_gamma = get_K_gamma(binary_system_output_data=binary_system_output_data,
                             test_domain=test_domain)
-        
+    else:
+        K_gamma = gamma_matrix
     hsic_vals_dict = {}
 
     u_all_bitstr = inputs_one_hot_binstrs_list_to_use[-1]

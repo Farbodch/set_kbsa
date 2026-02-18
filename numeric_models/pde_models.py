@@ -1,35 +1,11 @@
 import numpy as np
-from utils.math_utils import explicit_1D_Diff_fen as exp_1D_diff
-from utils import numeric_models as nm
 from dolfin import conditional, Constant, le, FunctionSpace, project
-
-def gen_toy_1_gamma(x_arr, params):
-    return lambda u: int((-(x_arr[0]*x_arr[0])+5*x_arr[1]-(u[0])+(u[1]*u[1])-1)<=params['g_ineq_c'])
-
-def gen_toy_2_gamma(x_arr, params):
-    return lambda u: int((-(x_arr[0]*x_arr[0])+5*x_arr[1]-(u[0]*u[0])+(u[1]*u[1])-1)<=params['g_ineq_c'])
-
-def gen_linearDecr_1_gamma(x_arr, params):
-    return lambda u: int((4*u[2]+2*u[1]+1*u[0]+0.5*x_arr[0])<=params['g_ineq_c'])
-
-def gen_linearDecr_2_gamma(x_arr, params):
-    return lambda u: int((4*u[2]+2*u[1]+4*u[0]+0.5*x_arr[0])<=params['g_ineq_c'])
-
-def gen_X1CosPiX2SinPiX2(x_arr, params):
-    return lambda u: int(((u[0]*np.cos(np.pi*u[1])))<=params['g_ineq_c'])
-
-def gen_toy_model_vect(x_arr, params):
-    return lambda u: (np.array([params['c_1']*u[0] + x_arr[0]*u[0] + params['c_2']*u[0]*u[1]])<=params['g_ineq_c']).astype(int)
-
-
-
-def gen_ishigami(x_arr, params):
-    return lambda u: int((np.sin(u[0])+params['a']*(np.sin(u[1])*np.sin(u[1]))+params['b']*(x_arr[0]*x_arr[0]*x_arr[0]*x_arr[0])*np.sin(u[0]))<=params['g_ineq_c'])
+from numeric_models.numeric_models_utils import model as nm_model
 
 
 def gen_1D_diff_explicit(x_arr, params):   
     def _get_at_x(u):
-        model = nm.model(model_type="diffusion_1D_explicit")
+        model = nm_model(model_type="diffusion_1d_explicit")
         model.P = params['P']
         model.mean = params['mu']
         model.std = params['std']
@@ -40,23 +16,30 @@ def gen_1D_diff_explicit(x_arr, params):
         return int(model_output<=params['g_ineq_c'])
     return _get_at_x
 
-def get_1D_diff_FEM(params):
+def get_1D_diff_FEM(params, comm=None, local_uid=None):
     def _get_at_all_x(u):
-        model = nm.model(model_type="diffusion_1D", 
+        model = nm_model(model_type="diffusion_1d",
+                        output_paraview=False,
                         P=params['P'], 
                         mean=params['mu'], 
                         std=params['std'],
-                        meshInterval=params['meshInterval'])
+                        mesh_num_of_steps=params['mesh_num_of_steps'],
+                        comm=comm,
+                        local_uid=local_uid)
 
-        model_output = model.diffuFen(coefficients=u)
-        if params['auto_mean']:
-            params['g_ineq_c'] = np.mean(model_output) 
-        return (model_output<=params['g_ineq_c']).astype(int)
+        model.diffuFen(coefficients=u, reset=True)
+        model_output = model.diffuFen_curr_u
+        # if params['auto_mean']:
+        #     params['g_ineq_c'] = np.mean(model_output)
+        # if params['return_bool']:
+        #     return (model_output<=params['g_ineq_c']).astype(int)
+        # else:
+        return model_output
     return _get_at_all_x
 
 def get_CDR(params, comm=None, local_uid=None):
     def _get_output_fens(u):
-        model = nm.model(model_type='cdr',
+        model = nm_model(model_type='cdr',
                         output_paraview=False,
                         mesh_directory=params['mesh_directory'],
                         mesh_steps=params['mesh_steps'],

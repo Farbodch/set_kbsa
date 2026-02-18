@@ -1,3 +1,17 @@
+#–----------------------------
+# make this script visible to system
+# and rest of the package visible
+# to this script
+#–----------------------------
+from os import path as os_path
+from sys import path as sys_path
+script_dir = os_path.dirname(os_path.abspath(__file__))
+project_root_dir = os_path.dirname(script_dir)
+sys_path.insert(0, project_root_dir)
+
+#–----------------------------
+# import dependencies
+#–----------------------------
 from numpy import (uint8, 
                    array as np_array,
                    zeros as np_zeros)
@@ -23,7 +37,7 @@ def main():
     valid_cdr_fields = ['fuel_field', 'oxygen_field', 'product_field', 'temp_field']
     process_model_name = '2d_cdr'
     process_settings={'2d_cdr': {'data_directory': 'data/experiment_data/cdr/vecSob',
-                                'fem_mesh_directory': 'data/CDR/mesh_save_dir/rectangle.xdmf',
+                                'mesh_directory': 'data/mesh_data/cdr/rectangle.xdmf',
                                 'u_domain_specifications': [{'distribution_type': 'log_uniform', 'min': 5.5e11, 'max': 1.5e12},
                                                             {'distribution_type': 'log_uniform', 'min': 1.5e3, 'max': 9.5e3},
                                                             {'distribution_type': 'uniform', 'min': 850, 'max': 1000},
@@ -132,7 +146,7 @@ def main():
             num_of_padded_runs_in_curr_rank += 1
         assert num_of_padded_runs_in_curr_rank==0
         
-        my_mesh = load_mesh(mesh_dir=process_settings[process_model_name]['fem_mesh_directory'])
+        my_mesh = load_mesh(mesh_dir=process_settings[process_model_name]['mesh_directory'])
         V = load_function_space(my_mesh)
 
         binary_system_output_data_dict = {}
