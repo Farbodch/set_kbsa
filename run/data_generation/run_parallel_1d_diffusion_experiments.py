@@ -49,7 +49,7 @@ def main():
                     'mesh_num_of_steps': h,
                     'std': std,
                     'g_ineq_c': {'diffusion_field': 3}}
-    
+    model_params['mesh_directory'] = f'data/mesh_data/diffusion_1d/h_{h}/interval_mesh.xdmf'
     #all workers need to have access to this
     u_indexSuperset_oneHot = get_u_index_superset_onehot(dim_of_U=P, higher_order=False)
     if rank == 0:

@@ -23,6 +23,7 @@ def get_1D_diff_FEM(params, comm=None, local_uid=None):
                         P=params['P'], 
                         mean=params['mu'], 
                         std=params['std'],
+                        mesh_directory=params['mesh_directory'],
                         mesh_num_of_steps=params['mesh_num_of_steps'],
                         comm=comm,
                         local_uid=local_uid)

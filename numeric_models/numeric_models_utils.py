@@ -327,7 +327,8 @@ class model:
         self.sobolVals_main = {}
 
         self.numItersPerNAtIdx = {}
-
+        if mesh_directory is not None:
+            self.mesh_directory = mesh_directory
         """
         NOTe: in structure below, domain_index set to 0 for ishigami model.
             structure:
@@ -397,9 +398,8 @@ class model:
             self.constraintVal = indicator_constraint_val
             self.projectOutputToCG = FEM_projection
             self.diffuFen_sobol_vect_len = mesh_num_of_steps
-
-            self.mesh_directory = mesh_directory
-            if mesh_directory is None:
+            
+            if self.mesh_directory is None:
                 self.mesh_save_dir = f'data/mesh_data/diffusion_1d/h_{self.mesh_num_of_steps}'
                 self.mesh_save_name = 'interval_mesh'
                 print(f'No mesh file was loaded. Creating a 1D interval mesh {self.mesh_1d_domain_interval}, and resolution of 1/{self.mesh_num_of_steps}')
@@ -411,7 +411,7 @@ class model:
                 self.mesh_directory = f'{self.mesh_save_dir}/{self.mesh_save_name}.xdmf'
 
             self.dolf_mesh = Mesh(self.comm)
-            with XDMFFile(self.comm, self.mesh_directory) as xdmf:
+            with XDMFFile(comm=self.comm, filename=self.mesh_directory) as xdmf:
                 xdmf.read(self.dolf_mesh)
             self.mesh_coords = self.dolf_mesh.coordinates().flatten()
             self.V = FunctionSpace(self.dolf_mesh, 'P', 1)
@@ -431,7 +431,7 @@ class model:
             self.mesh_save_name = 'rectangle'
 
             self.mesh_directory = mesh_directory
-            if mesh_directory is None:       
+            if self.mesh_directory is None:       
                 self.domain_width = 1.0
                 self.domain_height = 0.5
                 self.mesh_steps = 0.025
@@ -1066,7 +1066,7 @@ class model:
         self.diffuFen_curr_u = u
 
         if self.projectOutputToCG:
-            mesh = self.mesh
+            mesh = self.dolf_mesh
             projTargetSpace = FunctionSpace(mesh, 'CG', 1)
             u_projected = project(u, projTargetSpace)
             y = np_array([u_projected(x) for x in indicesToEvalProjAt])

@@ -208,14 +208,15 @@ def get_cell_markers_from_test_domain(mesh,
     if cell_marker_policy not in ['all', 'any']:
         raise ValueError("Policy must be either 'all' or 'any'.")
     
-    # get mesh dimension and geometry data
-    max_mesh_dim = mesh.geometry().dim()
+    # max_mesh_dim = mesh.geometry().dim()
+    tdim = mesh.topology().dim() #topological dimension (1 for interval/line, 2 for triangle, etc.)
+    gdim = mesh.geometry().dim() #geometric dimension (number of coordinates, e.g., x, y, z)
+
     all_vertex_coords = mesh.coordinates()
     cell_to_vertex_map = mesh.cells()
     
     # initialize a MeshFunction to store the integer markers for each cell.
-    # the second argument is the topological dimension of the entity to be marked (cells).
-    cell_markers = MeshFunction("size_t", mesh, max_mesh_dim)
+    cell_markers = MeshFunction("size_t", mesh, tdim)
     # default all cells to marker 0 (outside)
     cell_markers.set_all(0)
 
@@ -231,11 +232,11 @@ def get_cell_markers_from_test_domain(mesh,
         is_inside_flags = np_ones(len(vertex_indices_for_cell), dtype=bool)
         # sequentially apply the filter for each dimension in the test_domain
         for curr_dim in range(test_domain.shape[0]):
-            lower_bound = min(test_domain[curr_dim])
-            upper_bound = max(test_domain[curr_dim])
             # skip if the dimension is not relevant to the mesh
-            if curr_dim >= max_mesh_dim:
+            if curr_dim >= gdim:
                 continue
+            lower_bound = min(test_domain[curr_dim])
+            upper_bound = max(test_domain[curr_dim])      
             # get the coordinates for the current dimension for all vertices
             vertex_coords_in_dim = coords_of_cell_vertices[:, curr_dim]     
             # update the flags using a vectorized boolean AND operation.

@@ -2,7 +2,7 @@ from time import time as timetime
 from numeric_models.pde_models import get_1D_diff_FEM
 from numeric_models.numeric_models_utils import generate_data
 from numpy import (array as np_arr, save as np_save)
-from dolfin import XDMFFile, MPI as dolfin_MPI
+from dolfin import Mesh, XDMFFile, MPI as dolfin_MPI
 from auxiliary_utils.io_management import make_directory, write_to_textfile
 
 def diffusion_1d_hsic_experiment(u_indexSuperset_oneHot, 
@@ -36,7 +36,7 @@ def diffusion_1d_hsic_experiment(u_indexSuperset_oneHot,
     # u_P = generate_data('uniform', min_u=-1, max_u=1, size=depth_P+1)
 
     u_input_all_A = np_arr([generate_data('uniform', min_u=-1, max_u=1, size=depth_P+1) for _ in range(depth_P)])
-    # mesh_path = cdr_params["mesh_directory"]
+    mesh_directory = params["mesh_directory"]
     for idx_A, idx_A_str in enumerate(u_indexSuperset_oneHot):
         local_path_idx_A = f"{local_directory}/{idx_A_str}"
         make_directory(directory=local_path_idx_A,
@@ -60,11 +60,10 @@ def diffusion_1d_hsic_experiment(u_indexSuperset_oneHot,
         #store input data
         np_save(file=f"{local_path_idx_A}/input_data.npy", arr=u_input_idx_A)
         #store output data
-        # mesh = Mesh(fenics_comm)
-        # mesh = UnitIntervalMesh(params['mesh_num_of_steps'])
-        # with XDMFFile(fenics_comm, mesh_path) as xdmf:
-        #     xdmf.read(mesh)
-
+        mesh = Mesh(fenics_comm)
+        with XDMFFile(fenics_comm, mesh_directory) as xdmf:
+            xdmf.read(mesh)
+            
         with XDMFFile(fenics_comm, f'{local_path_idx_A}/diffusion_field') as xdmf:
             xdmf.write_checkpoint(results, 'diffusion_field', 0, XDMFFile.Encoding.HDF5, append=False)
 

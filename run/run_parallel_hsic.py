@@ -3,7 +3,7 @@
 # and rest of the package visible
 # to this script
 #–----------------------------
-from os import path as os_path
+from os import path as os_path, makedirs as os_makedirs
 from sys import path as sys_path
 script_dir = os_path.dirname(os_path.abspath(__file__))
 project_root_dir = os_path.dirname(script_dir)
@@ -29,12 +29,25 @@ from hsic.hsic_utils import (sample_fenics_function, # noqa: E402
                              compute_integrated_gamma_matrix_mpi,
                              cleanup_checkpoint_files,
                              assemble_gamma_matrix_from_checkpoints)
-from dolfin import UnitIntervalMesh, MPI as dolfin_MPI # noqa: E402
+from dolfin import (MPI as dolfin_MPI, parameters as df_parameters) # noqa: E402
+import argparse
 
 import warnings # noqa: E402
 warnings.filterwarnings("ignore", category=UserWarning)
+df_parameters["reorder_dofs_serial"] = False
+df_parameters["mesh_partitioner"] = "None"
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--N", type=int, default=100, required=True, help='Number of data points to use.')
+    parser.add_argument("--M", type=int, default=100, required=False, help='Number of samplings per data point to estimate the set kernel.')
+    parser.add_argument("--S", type=int, default=1, required=False, help='True for statistical estimation of the set kernel, False for explicitly integrating on FEM mesh.')
+    user_inputs = parser.parse_args()
+    N = user_inputs.N
+    M = user_inputs.M
+    S = user_inputs.S
+
+
     comm = dolfin_MPI.comm_world
     rank = comm.Get_rank()
     size = comm.Get_size()
@@ -59,19 +72,23 @@ def main():
                                 'field_of_interest': valid_cdr_fields[3]},
 
                         'diffusion_1d': {'data_directory': 'data/experiment_data/diffusion_1d/hsic',
+                                        'mesh_directory': 'data/mesh_data/diffusion_1d/h_128/interval_mesh.xdmf',
                                         'u_domain_specifications': [{'distribution_type': 'uniform', 'min': -1, 'max': 1} for _ in range(P)],
                                         'u_one_hot_key_map': {key: f'P_{P-i}' for i, key in enumerate(generator_order_r_idcs_as_onehot(r=1, d=P))},
-                                        'test_domain': np_array([[0.25, 0.75]]),
+                                        'test_domain': np_array([[0.45, 0.55]]),
                                         'P': P,
-                                        'g_constraint': 3,
+                                        'g_constraint': 0.135,
                                         'field_of_interest': 'diffusion_field'}}
     
 
 
     restart_toggle = False
-    k_set_compute_statistical = True
-    n = 100
-    m = 100
+    if S == 0:
+        k_set_compute_statistical = False
+    else:
+        k_set_compute_statistical = True
+    n = N
+    m = M
     chunk_size_K_gamma_fem_explicit = 10
     shuffle_inputs = True
     return_hsic_results = False
@@ -96,12 +113,7 @@ def main():
     #Load in mesh data.
     #Note: load_mesh() loads the mesh into comm.comm_self for each individual worker.
     #------------------------------------
-    if process_model_name == 'diffusion_1d':
-        '''TO DO:ERROR HERE!! MAYBE BEST TO SAVE MESH OF DIFFUSION_1D THAN TO GENERATE THE MESH EVERYTIME.'''
-        my_mesh = UnitIntervalMesh(dolfin_MPI.comm_self, 128) #REFACTOR!!!! 
-    else:
-        my_mesh = load_mesh(mesh_dir=process_settings[process_model_name]['mesh_directory'])
-    
+    my_mesh = load_mesh(mesh_dir=process_settings[process_model_name]['mesh_directory'])
     V = load_function_space(my_mesh)
 
     if rank == 0:
@@ -113,7 +125,7 @@ def main():
         u_arr, input_data_dirs_list_to_use = get_input_data_from_file_fenics_function(data_directory=process_settings[process_model_name]['data_directory'],
                                                                                 num_of_u_inputs=num_of_u_inputs,
                                                                                 n=n,
-                                                                                shuffle=True,
+                                                                                shuffle=False,
                                                                                 return_directories=True,
                                                                                 adjust_for_mpi=True,
                                                                                 mpi_size=size,
@@ -127,7 +139,7 @@ def main():
                                                             test_domain=process_settings[process_model_name]['test_domain'],
                                                             cell_marker_policy=cell_marker_policy)
             cell_marker_numpy_array_extract = cell_markers.array()
-        
+
         meta_data_dict = {'num_of_outer_loop_sampling_n': n,
                         'field_of_interest':process_settings[process_model_name]['field_of_interest'],
                         'test_domain':process_settings[process_model_name]['test_domain'],
@@ -137,9 +149,10 @@ def main():
             meta_data_dict['num_of_inner_loop_samplings_m'] = m
         else:
             meta_data_dict['k_set_compute_type'] = 'fem_explicit'
+        k_set_compute_type = meta_data_dict['k_set_compute_type']
         data_directory_with_uid = write_from_dict_to_text_file(data_to_write_dict=meta_data_dict,
                                     data_file_name='meta_data',
-                                    data_parent_directory=f'data/hsic_results/{process_model_name}',
+                                    data_parent_directory=f'data/hsic_results/{process_model_name}/{k_set_compute_type}',
                                     generate_new_uid=True,
                                     return_data_directory_with_uid=True)
     #------------------------------------
@@ -162,17 +175,17 @@ def main():
     while len(indices) < max_jobs:
         num_of_padded_runs_in_curr_rank += 1
     assert num_of_padded_runs_in_curr_rank==0
-
+    comm.barrier()
     gamma_matrix = None
     if not k_set_compute_statistical:
+        if rank != 0:
+            cell_markers = inject_cell_markers_from_numpy_array_to_MeshFunction(mesh=my_mesh,
+                                cell_marker_numpy_array_extract=cell_marker_numpy_array_extract)
         '''
         mass_matrix is built on-physical-node (individually per MPI worker)
         '''
         mass_matrix = assemble_mass_matrix_from_mesh(V=V, cell_markers=cell_markers)
         
-        if rank != 0:
-            cell_markers = inject_cell_markers_from_numpy_array_to_MeshFunction(mesh=my_mesh,
-                                cell_marker_numpy_array_extract=cell_marker_numpy_array_extract)
     #------------------------------------
     #if k_set_compute_statistic is set to true, then the set kernel is 
     #computed via empirical uniform sampling using m samples.
@@ -227,6 +240,8 @@ def main():
                                                             tmp_checkpoint_dir=f'{data_directory_with_uid}/checkpoints',
                                                             restart=restart_toggle)
         comm.barrier()
+        # print(field_data_dirs_list_to_use)
+        # print(gamma_matrix)
     if rank==0:
         hsic_results = hsic(u_domain_specifications=process_settings[process_model_name]['u_domain_specifications'],
                         u_one_hot_key_map=process_settings[process_model_name]['u_one_hot_key_map'],

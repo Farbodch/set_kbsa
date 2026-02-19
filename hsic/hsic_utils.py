@@ -10,7 +10,8 @@ from dolfin import (Mesh,
                     Function as df_Function,
                     TrialFunction as df_TrialFunction,
                     TestFunction as df_TestFunction,
-                    as_backend_type as df_as_backend_type)
+                    as_backend_type as df_as_backend_type,
+                    Point as df_Point)
 from dolfin.cpp.mesh import MeshFunctionSizet
 from numpy import (int32, float64, float32, uint8, fill_diagonal,
                 array as np_array,
@@ -72,7 +73,9 @@ def sample_fenics_function(data_directory: str,
 
     f_samplings = np_zeros(m)
     for i, x in enumerate(x_vect):
-        f_samplings[i] = f(x[0], x[1])
+        eval_point = df_Point(*x)
+        # f_samplings[i] = f(x[0], x[1])
+        f_samplings[i] = f(eval_point)
 
     del f
     gc.collect()
@@ -243,6 +246,8 @@ def load_fenics_functions_as_indicator(comm,
                                        V: FunctionSpace, 
                                        data_dirs_to_eval_list: list, 
                                        g_constraint: float):
+    data_dirs_to_eval_list.sort()
+    
     rank = comm.Get_rank()
     size = comm.Get_size()
     N = len(data_dirs_to_eval_list)

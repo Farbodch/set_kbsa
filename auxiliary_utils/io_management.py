@@ -97,7 +97,7 @@ def get_data_file_directories(base_dir: str,
     num_of_sub_folder_skips = 0
     num_of_sub_sub_folder_skips = 0
     #loop over each parent directory inside base_dir
-    for parent in base_dir.iterdir():
+    for parent in sorted(base_dir.iterdir()):
         if not parent.is_dir():
             num_of_parent_skips += 1
             if verbose:
@@ -140,7 +140,7 @@ def get_data_file_directories(base_dir: str,
                 P = params.get("P")
                 if not (
                     P == 3 and
-                    params.get("meshInterval") == 128
+                    params.get("mesh_num_of_steps") == 128
                 ):
                     num_of_parent_skips += 1
                     if verbose:
@@ -150,7 +150,7 @@ def get_data_file_directories(base_dir: str,
                 n_max_list.append(params["total_num_of_experiments"])
         
         #2) check subdirectories
-        sub_dirs = [d for d in parent.iterdir() if d.is_dir()]
+        sub_dirs = sorted([d for d in parent.iterdir() if d.is_dir()])
 
         #skip if parent folder has no subfolder structure
         if 'cdr' in process_type:
@@ -161,7 +161,7 @@ def get_data_file_directories(base_dir: str,
                 continue
 
         for sub in sub_dirs:
-            sub_subs = [d for d in sub.iterdir() if d.is_dir()]
+            sub_subs = sorted([d for d in sub.iterdir() if d.is_dir()])
 
             if 'cdr' in process_type:
                 #NOTe: This sub_sub num of sub folders check is not static for vecSob, as it can have
@@ -175,7 +175,7 @@ def get_data_file_directories(base_dir: str,
 
                 #3)check inside each sub_sub_directory for exactly 10 files
                 for sub_sub in sub_subs:
-                    files = [f for f in sub_sub.iterdir() if f.is_file()]
+                    files = sorted([f for f in sub_sub.iterdir() if f.is_file()])
                     if len(files) != 10 and Path(sub_sub).name != 'u_III':
                         num_of_sub_sub_folder_skips += 1
                         if verbose:
@@ -223,7 +223,7 @@ def get_data_file_directories(base_dir: str,
 
                 #3)check inside each sub_sub_directory for exactly 10 files
                 for sub_sub in sub_subs:
-                    files = [f for f in sub_sub.iterdir() if f.is_file()]
+                    files = sorted([f for f in sub_sub.iterdir() if f.is_file()])
                     if len(files) != 4:
                         num_of_sub_sub_folder_skips += 1
                         if verbose:
