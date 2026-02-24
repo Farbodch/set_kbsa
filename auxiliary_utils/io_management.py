@@ -181,11 +181,12 @@ def get_data_file_directories(base_dir: str,
             if verbose:
                 print(f"Skipping {parent}: could not parse params.")
             continue
-        num_of_mesh_steps_parent = params.get("num_of_mesh_steps")
-        if num_of_mesh_steps_parent != num_of_mesh_steps:
-            if verbose:
-                print(f"Skipping {parent}: looking for mesh_steps of {num_of_mesh_steps}, found mesh_steps of {num_of_mesh_steps_parent}.")
-            continue
+        if 'diffusion_1d' in process_type:
+            num_of_mesh_steps_parent = params.get("num_of_mesh_steps")
+            if num_of_mesh_steps_parent != num_of_mesh_steps:
+                if verbose:
+                    print(f"Skipping {parent}: looking for mesh_steps of {num_of_mesh_steps}, found mesh_steps of {num_of_mesh_steps_parent}.")
+                continue
         n_max_list = []
         ''' TO DO : These enforce_params values are arbitrary and need to be set in a higher-level settings file
                     by user, but now just check to enforce some abitrary values for this specific paper and 
@@ -415,7 +416,7 @@ def get_input_data_from_file_fenics_function(data_directory: Union[str, None] = 
                                             input_data_directories_list_to_use: Union[List, None]=None) -> Union[NDArray, Tuple[NDArray, List]]:
     if input_data_directories_list_to_use is None:
         assert data_directory is not None, "Must pass in parent data_directory if no explicit input_data_directories_list_to_use is passed in."
-        input_data_dirs_list = get_data_file_directories(data_directory, process_type=process_type, data_type='input_data')
+        input_data_dirs_list = get_data_file_directories(data_directory, process_type=process_type, data_type='input_data',verbose=True)
         n_max = len(input_data_dirs_list)
         data_dir_indices = np_arange(0, n_max)
         if shuffle:
