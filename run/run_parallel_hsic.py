@@ -41,7 +41,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--N", type=int, default=100, required=True, help='Number of data points to use.')
     parser.add_argument("--M", type=int, default=100, required=False, help='Number of samplings per data point to estimate the set kernel.')
-    parser.add_argument("--S", type=int, default=1, required=False, help='True for statistical estimation of the set kernel, False for explicitly integrating on FEM mesh.')
+    parser.add_argument("--S", type=int, default=0, required=False, help='True for statistical estimation of the set kernel, False for explicitly integrating on FEM mesh.')
     user_inputs = parser.parse_args()
     N = user_inputs.N
     M = user_inputs.M
@@ -53,7 +53,7 @@ def main():
     size = comm.Get_size()
 
     process_model_names = ['2d_cdr', 'diffusion_1d']
-    process_model_name = process_model_names[1]
+    process_model_name = process_model_names[0]
 
     #2d cdr setting <- TO BE REFACTORED
     #1d diffusion setting <- TO BE REFACTORED
