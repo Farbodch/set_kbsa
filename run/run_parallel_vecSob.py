@@ -84,7 +84,7 @@ def main():
                                                             {'distribution_type': 'uniform', 'min': 200, 'max': 400},
                                                             {'distribution_type': 'uniform', 'min': 0.5, 'max': 1.5}],
                                 'u_one_hot_key_map': {'10000': 'A', '01000': 'E', '00100': 'T_i', '00010': 'T_o', '00001': 'phi'},
-                                'test_domain': np_array([[0.5, 0.15],[0.2, 0.3]]),
+                                'test_domain': np_array([[0.15, 0.5],[0.2, 0.3]]),
                                 'g_constraint': 700,
                                 'field_of_interest': valid_cdr_fields[3],
                                 'which_orders': [1],

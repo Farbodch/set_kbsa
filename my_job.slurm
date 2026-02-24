@@ -26,4 +26,4 @@ conda activate set_kbsa
 # mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_vecSob.py
 
 # mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_cdr_experiments.py --N 5000
-mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run/run_parallel_hsic.py --N 7500
+mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run/run_parallel_hsic.py --N 10000
