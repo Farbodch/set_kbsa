@@ -1,0 +1,7 @@
+parent_uid_2026_02_24_16_39_41__a98f739eb4934f3c9a5f46bd863d25a6;
+num_of_outer_loop_sampling_n:1000;
+field_of_interest:diffusion_field;
+test_domain:[[0.4 0.6]];
+g_constraint:0.135;
+compute_method:explicit_FEM;
+mesh_num_of_steps:1024;

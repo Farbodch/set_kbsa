@@ -136,12 +136,12 @@ def calculate_vecSob_index_A_einsumed(binary_system_output_data_index_A: NDArray
     y_tilde_bar = np_asarray(y_data_bar[2], dtype=float64).reshape(1, -1)
     y_II_centered = np_asarray(y_data[1], dtype=float64) - y_II_bar
     y_tilde_centered = np_asarray(y_data[2], dtype=float64) - y_tilde_bar
-    T_A = np_einsum('ij,ij->', y_II_centered, y_tilde_centered, optimize=True) / (n - 1)
+    T_A = np_einsum('ij,ij->', y_II_centered, y_tilde_centered, optimize=True)
     
     y_I = np_asarray(y_data[0], dtype=float64)
     y_bar_I = np_asarray(y_data_bar[0], dtype=float64).reshape(1, -1)
     y_I_centered_I = y_I - y_bar_I
-    T = np_einsum('ij,ij->', y_I_centered_I, y_I_centered_I, optimize=True) / (n - 1)
+    T = np_einsum('ij,ij->', y_I_centered_I, y_I_centered_I, optimize=True)
 
     """
     Next:
@@ -160,8 +160,8 @@ def calculate_vecSob_index_A_vectorized(binary_system_output_data_index_A: NDArr
     n = y_data.shape[1]
     y_data_bar = y_data.mean(axis=1)
 
-    T_A = ((y_data[1] - y_data_bar[1]) * (y_data[2] - y_data_bar[2])).sum()/(n-1)  
-    T = ((y_data[0] - y_data_bar[0])**2).sum()/(n-1)
+    T_A = ((y_data[1] - y_data_bar[1]) * (y_data[2] - y_data_bar[2])).sum()
+    T = ((y_data[0] - y_data_bar[0])**2).sum()
     return T_A/T
 
 def calculate_vecSob_index_A_looped(binary_system_output_data_index_A: NDArray):
@@ -181,8 +181,8 @@ def calculate_vecSob_index_A_looped(binary_system_output_data_index_A: NDArray):
         for j in range(h):
             T_A += (y_data[1,i,j] - y_data_bar[1,j])*(y_data[2,i,j]-y_data_bar[2,j])
             T += (y_data[0,i,j] - y_data_bar[0,j])**2
-    T_A = T_A/(n-1) 
-    T = T/(n-1) 
+    T_A = T_A
+    T = T
     return T_A/T
 
 def build_sorted_output_data_dict(binary_system_output_data_dict: dict) -> dict:
