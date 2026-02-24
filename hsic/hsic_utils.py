@@ -254,12 +254,8 @@ def load_fenics_functions_as_indicator(comm,
     local_indices = np_array_split(range(N), size)[rank]
     local_data = []
     my_fenics_fen = df_Function(V)
-    # local_N = N // size
-    # idx_start = rank * local_N
-    # idx_end = idx_start + local_N if rank != size-1 else N
 
 
-    # for i in range(idx_start, idx_end):
     for i in local_indices:
         data_directory_i = data_dirs_to_eval_list[i]
         field_of_interest = Path(data_directory_i).name

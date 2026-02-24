@@ -6,7 +6,7 @@ from dolfin import XDMFFile, Mesh, MPI as dolfin_MPI
 from auxiliary_utils.io_management import make_directory, write_to_textfile
 
 def cdr_hsic_experiment(u_indexSuperset_oneHot, 
-                        cdr_params, mpi_rank, 
+                        params, mpi_rank, 
                         parent_directory, 
                         make_directory_with_uid: bool=True,
                         make_directory_with_datetime: bool=False):
@@ -39,7 +39,7 @@ def cdr_hsic_experiment(u_indexSuperset_oneHot,
     u_phi = generate_data('uniform', min_u=0.5, max_u=1.5, size=6)
 
     u_input_all_A = np_arr([u_A, u_E, u_T_i, u_T_o, u_phi])
-    mesh_path = cdr_params["mesh_directory"]
+    mesh_path = params["mesh_directory"]
     for idx_A, idx_A_str in enumerate(u_indexSuperset_oneHot):
         local_path_idx_A = f"{local_directory}/{idx_A_str}"
         make_directory(directory=local_path_idx_A,
@@ -51,7 +51,7 @@ def cdr_hsic_experiment(u_indexSuperset_oneHot,
         u_input_idx_A = u_input_all_A[:, idx_A]
         simul_t0 = timetime()
         print(f'Started work. Rank {mpi_rank} - A_str - {idx_A_str} - local uid {local_uid}', flush=True)
-        cdr_fen = get_CDR(params=cdr_params, comm=fenics_comm, local_uid=local_uid)
+        cdr_fen = get_CDR(params=params, comm=fenics_comm, local_uid=local_uid)
         results_list = cdr_fen(u=u_input_idx_A)
         print(f'Work done! Rank {mpi_rank} - A_str - {idx_A_str} - local uid {local_uid}', flush=True)
         simul_t1 = timetime()

@@ -14,6 +14,7 @@ from numpy import (arange as np_arange,
 from auxiliary_utils.mpi_management import adjust_sampling_number_for_hsic
 from numpy.random import (shuffle as np_shuffle)
 from numpy.typing import NDArray
+import pandas as pd
 
 def make_directory(directory: str, 
                 with_uid: bool = False,
@@ -65,12 +66,75 @@ def write_to_textfile(directory: str,
             curr_datetime = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
             f.write(f'datetime_{curr_datetime};\n')
 
+#-------------------------------------
+# functions to read-in results data (refactor?)
+#-------------------------------------
+def parse_metadata_file(metadata_path: Path) -> dict:
+    parsed_metadata_dict = {}
+    with open(metadata_path, 'r') as f:
+        content = f.read()
+    items = [item.strip() for item in content.split(';') if item.strip()]
+    for item in items:
+        if ':' in item:
+            key, val = item.split(':', 1)
+            parsed_metadata_dict[key.strip()] = val.strip()
+        else:
+            if item.startswith('num_of_grid_points'):
+                parsed_metadata_dict['num_of_grid_points'] = item.replace('num_of_grid_points', '').strip()
+            elif item.startswith('parent_uid'):
+                parsed_metadata_dict['parent_uid'] = item.strip()
+    return parsed_metadata_dict
+def metadata_checker(metadata_path: Path, expected_metadata: dict) -> bool:
+    if not metadata_path.exists():
+        return False
+    parsed_metadata_dict = parse_metadata_file(metadata_path)
+    # first converting expected_metadata dict values to string for safe comparison,
+    # then comparing.
+    # we check only the keys passed-in through the expected_metadata dict.
+    for key, expected_value in expected_metadata.items():
+        if parsed_metadata_dict.get(key) != str(expected_value):
+            return False
+    return True
+def read_in_results_data(base_directory: str, expected_metadata: dict):
+    base_path = Path(base_directory)
+    aggregated_data = []
+    for subdir in base_path.iterdir():
+        if not subdir.is_dir():
+            continue
+        metadata_path = subdir / 'meta_data.txt'
+        results_path = subdir / 'results.txt'
+        if metadata_path.exists() and results_path.exists():
+            if metadata_checker(metadata_path=metadata_path, expected_metadata=expected_metadata):
+                parsed_meta = parse_metadata_file(metadata_path)
+                n_value = float(parsed_meta.get('num_of_outer_loop_sampling_n', 0))
+                with open(results_path, 'r') as f:
+                    results_str = f.read().strip()
+                    try:
+                        results_dict = ast.literal_eval(results_str)
+                    except (SyntaxError, ValueError):
+                        print(f"Failed to parse results in {subdir}")
+                        continue
+                record = {'num_of_outer_loop_sampling_n': n_value}
+                record.update(results_dict)
+                
+                aggregated_data.append(record)
+
+    df = pd.DataFrame(aggregated_data)
+    if not df.empty:
+        df = df.sort_values(by='num_of_outer_loop_sampling_n').reset_index(drop=True)
+        
+    return df
+#-------------------------------------
+
+
 #NOTe: This io manager for file directories has too many hard-coded condition checks. Not usable for, e.g., comsol structures or some other filing 
 # structs with differet numbers of dirs, subdirs and subsubdirs. Change to generalize or remove redunandancy checks unless cdr or something? 
 def get_data_file_directories(base_dir: str, 
                               data_type: str, 
                               process_type: str='cdr', 
                               return_n_max_list: bool=False,
+                              num_of_mesh_steps: int = 128,
+                              explicit_FEM_toggle: bool | None = None,
                               verbose=True,
                               enforce_params=True):
     """
@@ -92,7 +156,6 @@ def get_data_file_directories(base_dir: str,
     # target_filename = f"{chosen_cdr_field}.h5"
 
     collected_paths = []
-
     num_of_parent_skips = 0
     num_of_sub_folder_skips = 0
     num_of_sub_sub_folder_skips = 0
@@ -118,11 +181,17 @@ def get_data_file_directories(base_dir: str,
             if verbose:
                 print(f"Skipping {parent}: could not parse params.")
             continue
-        
+        num_of_mesh_steps_parent = params.get("num_of_mesh_steps")
+        if num_of_mesh_steps_parent != num_of_mesh_steps:
+            if verbose:
+                print(f"Skipping {parent}: looking for mesh_steps of {num_of_mesh_steps}, found mesh_steps of {num_of_mesh_steps_parent}.")
+            continue
         n_max_list = []
         ''' TO DO : These enforce_params values are arbitrary and need to be set in a higher-level settings file
                     by user, but now just check to enforce some abitrary values for this specific paper and 
                     simply fails to read in anything else.'''
+        if 'diffusion_1d' in process_type:
+            P = params.get("P")
         if enforce_params:
             if 'cdr' in process_type:
             #validate required conditions
@@ -133,18 +202,17 @@ def get_data_file_directories(base_dir: str,
                 ):
                     num_of_parent_skips += 1
                     if verbose:
-                        print(f"Skipping {parent}: incorrect cdr_params")
+                        print(f"Skipping {parent}: incorrect params")
                     continue
             
             elif 'diffusion_1d' in process_type:
-                P = params.get("P")
                 if not (
                     P == 3 and
-                    params.get("mesh_num_of_steps") == 128
+                    params.get("num_of_mesh_steps") == num_of_mesh_steps
                 ):
                     num_of_parent_skips += 1
                     if verbose:
-                        print(f"Skipping {parent}: incorrect cdr_params")
+                        print(f"Skipping {parent}: incorrect params")
                     continue
             elif process_type == 'analytical' and return_n_max_list:
                 n_max_list.append(params["total_num_of_experiments"])
@@ -215,20 +283,32 @@ def get_data_file_directories(base_dir: str,
                 #NOTe: This sub_sub num of sub folders check is not static for vecSob, as it can have
                 # a varying number depending on whether the required orders were created (for total vs
                 # just the closed Sob indices). As such, a static folder cardinality check does not work here.
-                if len(sub_subs) != P+1:
-                    num_of_sub_folder_skips += 1
-                    if verbose:
-                        print(f"Skipping {parent}/{sub}: does not have {P+1} sub_sub-folders.")
-                    continue
+                if 'vecSob' in process_type:
+                    if len(sub_subs) != 2*P+3:
+                        num_of_sub_folder_skips += 1
+                        if verbose:
+                            print(f"Skipping {parent}/{sub}: does not have {P+1} sub_sub-folders.")
+                        continue
+                else:
+                    if len(sub_subs) != P+1:
+                        num_of_sub_folder_skips += 1
+                        if verbose:
+                            print(f"Skipping {parent}/{sub}: does not have {P+1} sub_sub-folders.")
+                        continue
 
-                #3)check inside each sub_sub_directory for exactly 10 files
+                #3)check inside each sub_sub_directory for exactly 4 files
                 for sub_sub in sub_subs:
                     files = sorted([f for f in sub_sub.iterdir() if f.is_file()])
                     if len(files) != 4:
                         num_of_sub_sub_folder_skips += 1
                         if verbose:
-                            print(f"Skipping {parent}/{sub}/{sub_sub}: does not contain the expected 4 files.")
+                            print(f"Skipping {sub_sub}: does not contain the expected 4 files.")
                         continue
+                    # elif len(files) != 2 and Path(sub_sub).name == 'u_III':
+                    #     num_of_sub_sub_folder_skips += 1
+                    #     if verbose:
+                    #         print(f"Skipping {sub_sub}: does not contain the expected 2 files.")
+                    #     continue
 
                     #4.a)collect chosen .h5 or .npy file
                     wanted_path = sub_sub / target_filename
@@ -253,17 +333,17 @@ def get_data_file_directories(base_dir: str,
 
 def parse_meta_data(meta_file: Path, process_type: str):
     """
-    Extract and return cdr_params dict from meta_data.txt.
+    Extract and return params dict from meta_data.txt.
     """
 
-    '''TO DO: REFACTOR TO USE model_params FOR ALL MODELS, NOT cdr_params_ and etc.'''
+    '''TO DO: REFACTOR TO USE model_params FOR ALL MODELS, NOT params_ and etc.'''
     text = meta_file.read_text()
     if 'cdr' in process_type:
-    #cdr_params appear after "cdr_params_"
-        start_idx = text.find("cdr_params_")
+    #params appear after "params_"
+        start_idx = text.find("params_")
         if start_idx == -1:
             return None
-        start_idx += len("cdr_params_")
+        start_idx += len("params_")
         #extract param dictionary content between '{' and '}'
         dict_str = text[start_idx:].strip()
         dict_str = dict_str[dict_str.find("{"): dict_str.rfind("}")+1]
@@ -271,14 +351,14 @@ def parse_meta_data(meta_file: Path, process_type: str):
             params = ast.literal_eval(dict_str)
             return params
         except:
-            print(f"Could not parse cdr_params in {meta_file}")
+            print(f"Could not parse params in {meta_file}")
             return None
     elif 'diffusion_1d' in process_type:
     #model_params appear after "model_params_"
-        start_idx = text.find("model_params_")
+        start_idx = text.find("params_")
         if start_idx == -1:
             return None
-        start_idx += len("model_params_")
+        start_idx += len("params_")
         #extract param dictionary content between '{' and '}'
         dict_str = text[start_idx:].strip()
         dict_str = dict_str[dict_str.find("{"): dict_str.rfind("}")+1]

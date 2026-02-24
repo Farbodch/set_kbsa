@@ -1,14 +1,18 @@
-from numpy import (array as np_array,
+from numpy import (float64, array as np_array,
                 asarray as np_asarray,
                 einsum as np_einsum,
                 float64 as np_float64,
                 log2 as np_log2,
-                floor as np_floor)
+                floor as np_floor,
+                zeros as np_zeros,
+                zeros_like as np_zeros_like)
 from numpy.typing import NDArray
 from vecSob.vecSob_utils import (sample_fenics_function, 
                                  calculate_vecSob_index_A_einsumed,
                                  calculate_vecSob_index_A_vectorized,
-                                 calculate_vecSob_index_A_looped)
+                                 calculate_vecSob_index_A_looped,
+                                 load_fenics_functions_as_indicator,
+                                 integrated_spatial_cov_memory_mpi)
 from auxiliary_utils.io_management import (get_input_data_from_file_analytical,
                                             get_input_data_from_file_fenics_function,
                                             load_mesh,
@@ -21,6 +25,7 @@ from numba.core.registry import CPUDispatcher
 from types import FunctionType
 from dolfin import MPI as dolfin_MPI
 from mpi4py import MPI as pyMPI
+import gc
 """ 
 LEFT TO DO:
     Read-in data from file & sampling Both with-MPI and without-MPI
@@ -51,6 +56,7 @@ def vecSob(data_directory: str | None = None,
         process_all_order_one_indices: bool = False, #maybe instead of this, can send in which_order numbers instead?
         input_data_dirs_to_use_parall_processed=None,
         process_type: str = 'fenics_function',
+        compute_statistical: bool = False,
         fem_process_settings: dict={'mesh_directory': 'data/mesh_data/cdr/rectangle.xdmf',
                                     'field_of_interest': 'temp_field'},
         analytical_process_settings: dict = {'process_generator': gen_ishigami}):
@@ -94,6 +100,7 @@ def vecSob(data_directory: str | None = None,
     vecSob_vals_dict = {}
     for index in index_set:
         vecSob_vals_dict[index] = calculate_vecSob_index_A_einsumed(binary_system_output_data_index_A=binary_system_output_data_dict[index])
+        # vecSob_vals_dict[index] = calculate_vecSob_index_A_vectorized(binary_system_output_data_index_A=binary_system_output_data_dict[index])
     
     if map_one_hot_keys:
         vecSob_vals_dict_key_mapped = {}
@@ -128,7 +135,7 @@ def vecSob(data_directory: str | None = None,
     return vecSob_vals_dict
 
 #not properly supporting orders higher than 1 yet.
-def vecSob_parallelized(comm, 
+def vecSob_statistical_parallelized(comm, 
                         sorted_output_data_dict: dict,
                         num_of_u_inputs: int,
                         u_one_hot_key_map: dict,
@@ -207,8 +214,7 @@ def vecSob_parallelized(comm,
                     vecSob_results_mapped[key] = val
                 if get_total_sobols and direct_binstr_sum(key) == (num_of_u_inputs-1):
                     vecSob_results_mapped[f"t_{u_one_hot_key_map[get_index_complement(key)]}"] = 1-val
-
-        return vecSob_results_mapped   
+        return vecSob_results_mapped
     
     # Worker-branch: perform the given work
     else:
@@ -251,4 +257,79 @@ def vecSob_parallelized(comm,
         #     comm.send(result_dict, 
         #               dest=0, 
         #               tag=TAG_DONE)
+        return None
+
+def integrated_spatial_generalizedSob_parallelized(comm,
+                              V,
+                              mass_matrix,
+                              g_constraint,
+                              data_file_dirs_dict,
+                              u_one_hot_key_map,
+                              which_orders,
+                              num_of_u_inputs,
+                              get_total_sobols):
+
+    rank = comm.Get_rank()
+    cov_results = {}
+    u_I_indicators = load_fenics_functions_as_indicator(comm=comm, 
+                                                        V=V, 
+                                                        data_dirs_to_eval_list=data_file_dirs_dict['u_I'], 
+                                                        g_constraint=g_constraint)
+    comm.Barrier()
+    cov_u_I = integrated_spatial_cov_memory_mpi(comm=comm, 
+                                            mass_matrix=mass_matrix, 
+                                            g_indicators_list=u_I_indicators, 
+                                            g_A_indicators_list=u_I_indicators)
+    
+    if rank == 0:
+        cov_results['u_I'] = cov_u_I
+    del u_I_indicators
+    gc.collect()
+
+    u_II_indicators = load_fenics_functions_as_indicator(comm=comm, 
+                                                        V=V, 
+                                                        data_dirs_to_eval_list=data_file_dirs_dict['u_II'], 
+                                                        g_constraint=g_constraint)
+    comm.Barrier()
+    u_A_keys = [k for k in data_file_dirs_dict.keys() if k not in ['u_I', 'u_II']]
+    if not get_total_sobols:
+        u_A_keys = [k for k in u_A_keys if direct_binstr_sum(k)==1]
+    for u_A_key in u_A_keys:
+        u_A_indicators = load_fenics_functions_as_indicator(comm=comm, 
+                                                            V=V, 
+                                                            data_dirs_to_eval_list=data_file_dirs_dict[u_A_key], 
+                                                            g_constraint=g_constraint)
+        comm.Barrier()
+        sobol_val = integrated_spatial_cov_memory_mpi(
+            comm=comm, 
+            mass_matrix=mass_matrix, 
+            g_indicators_list=u_II_indicators, 
+            g_A_indicators_list=u_A_indicators)
+        if rank == 0:
+            cov_results[u_A_key] = sobol_val
+        del u_A_indicators
+        gc.collect()
+    
+    del u_II_indicators
+    gc.collect()
+    
+    if rank == 0:
+        vecSob_results_mapped = {}
+        for key in u_A_keys:
+            try:
+                val_A = cov_results[key]
+            except KeyError:
+                raise KeyError(f'Key {key} from {u_A_keys} not in {cov_results.keys()}')
+            val_all = cov_results['u_I']
+            val = val_A / val_all
+            if direct_binstr_sum(key) == 1:
+                vecSob_results_mapped[u_one_hot_key_map[key]] = val
+            else:
+                if direct_binstr_sum(key) in which_orders:
+                    vecSob_results_mapped[key] = val
+                if get_total_sobols and direct_binstr_sum(key) == (num_of_u_inputs-1):
+                    vecSob_results_mapped[f"t_{u_one_hot_key_map[get_index_complement(key)]}"] = 1-val
+        
+        return vecSob_results_mapped
+    else:
         return None

@@ -3,7 +3,7 @@
 # and rest of the package visible
 # to this script
 #–----------------------------
-from os import path as os_path, makedirs as os_makedirs
+from os import path as os_path
 from sys import path as sys_path
 script_dir = os_path.dirname(os_path.abspath(__file__))
 project_root_dir = os_path.dirname(script_dir)
@@ -30,7 +30,7 @@ from hsic.hsic_utils import (sample_fenics_function, # noqa: E402
                              cleanup_checkpoint_files,
                              assemble_gamma_matrix_from_checkpoints)
 from dolfin import (MPI as dolfin_MPI, parameters as df_parameters) # noqa: E402
-import argparse
+import argparse # noqa: E402
 
 import warnings # noqa: E402
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -169,12 +169,12 @@ def main():
     if not k_set_compute_statistical:
         cell_marker_numpy_array_extract = comm.bcast(cell_marker_numpy_array_extract, root=0)
     n = comm.bcast(n, root=0)
-    max_jobs = (n + size - 1) // size 
+    # max_jobs = (n + size - 1) // size 
     indices = range(rank, n, size)
-    num_of_padded_runs_in_curr_rank = 0
-    while len(indices) < max_jobs:
-        num_of_padded_runs_in_curr_rank += 1
-    assert num_of_padded_runs_in_curr_rank==0
+    # num_of_padded_runs_in_curr_rank = 0
+    # while len(indices) < max_jobs:
+    #     num_of_padded_runs_in_curr_rank += 1
+    # assert num_of_padded_runs_in_curr_rank==0
     comm.barrier()
     gamma_matrix = None
     if not k_set_compute_statistical:

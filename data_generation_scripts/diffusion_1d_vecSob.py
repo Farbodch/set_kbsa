@@ -1,40 +1,36 @@
 from time import time as timetime
-from numeric_models.pde_models import get_CDR
+from numeric_models.pde_models import get_1D_diff_FEM
 from numeric_models.numeric_models_utils import generate_data
 from numpy import (int8, array as np_arr, 
-                         save as np_save, 
-                         where as np_where)
-from dolfin import XDMFFile, Mesh, MPI as dolfin_MPI
+                   save as np_save,
+                   where as np_where)
+from dolfin import Mesh, XDMFFile, MPI as dolfin_MPI
 from auxiliary_utils.io_management import make_directory, write_to_textfile
 
-def _store_output_data(fenics_comm, results_list, local_path_idx_A, mesh_directory):
+
+def _store_output_data(fenics_comm, results, local_path_idx_A, mesh_directory):
     # store output data
     mesh = Mesh(fenics_comm)
     with XDMFFile(fenics_comm, mesh_directory) as xdmf:
         xdmf.read(mesh)
-    with XDMFFile(fenics_comm, f'{local_path_idx_A}/fuel_field') as xdmf_1:
-        xdmf_1.write_checkpoint(results_list[0], 'fuel_field', 0, XDMFFile.Encoding.HDF5, append=False)
-    with XDMFFile(fenics_comm, f'{local_path_idx_A}/oxygen_field') as xdmf_2:
-        xdmf_2.write_checkpoint(results_list[1], 'oxygen_field', 0, XDMFFile.Encoding.HDF5, append=False)
-    with XDMFFile(fenics_comm, f'{local_path_idx_A}/product_field') as xdmf_3:
-        xdmf_3.write_checkpoint(results_list[2], 'product_field', 0, XDMFFile.Encoding.HDF5, append=False)   
-    with XDMFFile(fenics_comm, f'{local_path_idx_A}/temp_field') as xdmf_4:
-        xdmf_4.write_checkpoint(results_list[3], 'temp_field', 0, XDMFFile.Encoding.HDF5, append=False)
+    with XDMFFile(fenics_comm, f'{local_path_idx_A}/diffusion_field') as xdmf:
+            xdmf.write_checkpoint(results, 'diffusion_field', 0, XDMFFile.Encoding.HDF5, append=False)
 
-def _run_cdr(fenics_comm, 
+def _run_diffusion_1d(fenics_comm, 
              params, 
              u, 
              idx_A_str, 
-             mpi_rank, 
-             local_uid, 
-             verbose: bool = True,
+             mpi_rank,
+             local_uid,
+             verbose: bool = True, 
              return_sim_time: bool = True):
-    
+
     simul_t0 = timetime()
     if verbose:
         print(f'Started work. Rank {mpi_rank} - A_str - {idx_A_str} - local uid {local_uid}', flush=True)
-    cdr_fen = get_CDR(params=params, comm=fenics_comm, local_uid=local_uid)
-    results = cdr_fen(u=u)
+    diffusion_1d_fen = get_1D_diff_FEM(params=params, comm=fenics_comm, local_uid=local_uid)
+    results = diffusion_1d_fen(u=u)
+
     if verbose:
         print(f'Work done! Rank {mpi_rank} - A_str - {idx_A_str} - local uid {local_uid}', flush=True)
     simul_t1 = timetime()
@@ -51,14 +47,14 @@ def _run_experiment(params, u_input_idx_A, mesh_directory, fenics_comm, mpi_rank
                 return_new_directory=False,
                 return_uid=False)
 
-    results, simul_time_str = _run_cdr(fenics_comm=fenics_comm, 
-                                            params=params, 
-                                            u=u_input_idx_A,
-                                            idx_A_str=idx_A_str,
-                                            mpi_rank=mpi_rank, 
-                                            local_uid=local_uid, 
-                                            verbose=True, 
-                                            return_sim_time=True)
+    results, simul_time_str = _run_diffusion_1d(fenics_comm=fenics_comm, 
+                                                params=params, 
+                                                u=u_input_idx_A,
+                                                idx_A_str=idx_A_str,
+                                                mpi_rank=mpi_rank, 
+                                                local_uid=local_uid, 
+                                                verbose=True, 
+                                                return_sim_time=True)
     #-----------------
     # store results to file
     #-----------------
@@ -76,8 +72,8 @@ def _run_experiment(params, u_input_idx_A, mesh_directory, fenics_comm, mpi_rank
                     file_name='meta_data',
                     content_to_write_to_txt_dict=content_to_write_to_txt_dict,
                     include_current_datetime=True)
-    
-def cdr_vecSob_experiment(index_set_to_calculate, 
+
+def diffusion_1d_vecSob_experiment(index_set_to_calculate, 
                         params, mpi_rank, 
                         parent_directory, 
                         make_directory_with_uid: bool=True,
@@ -94,7 +90,7 @@ def cdr_vecSob_experiment(index_set_to_calculate,
 
 
     we're sampling the random-inputs here (save to u_sampled), 
-    then define a generator by calling f=get_CDR(), 
+    then define a generator by calling f=get_1D_diff_FEM(), 
     then run results_fens_list = f(u=u_sampled).
     results_fens_list contains 4 'dolfin.function.function.Function' objects in it (list),
     where each object represents an observable field, where one can query by 
@@ -111,17 +107,15 @@ def cdr_vecSob_experiment(index_set_to_calculate,
                                                 with_datetime=make_directory_with_datetime, 
                                                 return_new_directory=True, 
                                                 return_uid=True)
-
-    u_A = generate_data('log_uniform', min_u=5.5e11, max_u=1.5e12, size=3)
-    u_E = generate_data('log_uniform', min_u=1.5e3, max_u=9.5e3, size=3)
-    u_T_i = generate_data('uniform', min_u=850, max_u=1000, size=3)
-    u_T_o = generate_data('uniform', min_u=200, max_u=400, size=3)
-    u_phi = generate_data('uniform', min_u=0.5, max_u=1.5, size=3)
-
-    u_all_realizations = np_arr([u_A, u_E, u_T_i, u_T_o, u_phi])
+    depth_P = params["P"]
+    # choosing range(depth_P) for individual indices for each randomized-input 
+    # (P_1 ...01, P_2 ...10, P_3 ...100, etc.) 
+    # and size=3 for the three input-data-sets required for the pick-freeze algorithm
+    # u_P = generate_data('uniform', min_u=-1, max_u=1, size=3)
+    u_all_realizations = np_arr([generate_data('uniform', min_u=-1, max_u=1, size=3) for _ in range(depth_P)])
     u_I = u_all_realizations[:, 0]
     u_II = u_all_realizations[:, 1]
-    u_III = u_all_realizations[:, 2] 
+    u_III = u_all_realizations[:, 2]
     mesh_directory = params["mesh_directory"]
     _run_experiment(params = params, 
                     u_input_idx_A=u_I, 

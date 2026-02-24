@@ -13,12 +13,12 @@ sys_path.insert(0, project_root_dir)
 #–----------------------------
 # import dependencies
 #–----------------------------
-from auxiliary_utils.index_management import get_u_index_superset_onehot
-from dolfin import MPI as dolfin_MPI
-from auxiliary_utils.io_management import make_directory, write_to_textfile
-from auxiliary_utils.mpi_management import get_per_rank_padded_indices, get_total_num_of_padding
-from data_generation_scripts.cdr_hsic import cdr_hsic_experiment
-import argparse
+from auxiliary_utils.index_management import get_u_index_superset_onehot # noqa: E402
+from dolfin import MPI as dolfin_MPI # noqa: E402
+from auxiliary_utils.io_management import make_directory, write_to_textfile # noqa: E402
+from auxiliary_utils.mpi_management import get_per_rank_padded_indices, get_total_num_of_padding # noqa: E402
+from data_generation_scripts.cdr_hsic import cdr_hsic_experiment # noqa: E402
+import argparse # noqa: E402
 
 def main():
     parser = argparse.ArgumentParser()
@@ -39,7 +39,7 @@ def main():
 
     padded_indices, local_num_of_padding = get_per_rank_padded_indices(N=N, size=size, rank=rank)
 
-    cdr_params = {'mesh_directory': 'data/mesh_data/cdr/rectangle.xdmf', 
+    params = {'mesh_directory': 'data/mesh_data/cdr/rectangle.xdmf', 
                 't_end': cdr_t_end, #in seconds
                 'num_steps': cdr_num_steps, #time steps, in t_end/num_steps increments, e.g., 100 steps for 0.01 t_end is 0.0001s, 0.1ms
                 'return_bool': False,
@@ -66,7 +66,7 @@ def main():
     parent_uid = comm.bcast(parent_uid, root=0) 
 
     local_results = [(i, cdr_hsic_experiment(u_indexSuperset_oneHot=u_indexSuperset_oneHot,
-                            cdr_params=cdr_params,
+                            params=params,
                             mpi_rank=rank, 
                             parent_directory=parent_directory)) for i in padded_indices]
     
@@ -83,15 +83,15 @@ def main():
         # print(all_results)
         print("Done:", len(flat), "tasks")
 
-        if len(cdr_params['mesh_directory']) != 0:
-            cdr_params.pop('mesh_steps')
-        if not cdr_params['return_bool']:
-            cdr_params.pop('g_ineq_c')
+        if len(params['mesh_directory']) != 0:
+            params.pop('mesh_steps')
+        if not params['return_bool']:
+            params.pop('g_ineq_c')
         
         content_to_write_to_txt_dict = {'parent_uid': parent_uid,
                                         'total_num_of_experiments': int(N+total_num_of_padding_post),
                                         'total_num_of_padded_runs': int(total_num_of_padding_post),
-                                        'cdr_params': cdr_params}
+                                        'params': params}
         
         write_to_textfile(directory=parent_directory,
                         file_name='meta_data',

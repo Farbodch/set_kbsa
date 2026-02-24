@@ -13,17 +13,18 @@ sys_path.insert(0, project_root_dir)
 #–----------------------------
 # import dependencies
 #–----------------------------
-from auxiliary_utils.index_management import get_u_index_superset_onehot
-from dolfin import MPI as dolfin_MPI
-from auxiliary_utils.io_management import make_directory, write_to_textfile
-from auxiliary_utils.mpi_management import get_per_rank_padded_indices, get_total_num_of_padding
-from data_generation_scripts.diffusion_1d_hsic import diffusion_1d_hsic_experiment
-import argparse
+from auxiliary_utils.index_management import generator_order_r_idcs_as_onehot # noqa: E402
+from dolfin import MPI as dolfin_MPI # noqa: E402
+from auxiliary_utils.io_management import make_directory, write_to_textfile # noqa: E402
+from auxiliary_utils.mpi_management import get_per_rank_padded_indices, get_total_num_of_padding # noqa: E402
+from auxiliary_utils.mesh_management import generate_1D_mesh # noqa: E402
+from data_generation_scripts.diffusion_1d_vecSob import diffusion_1d_vecSob_experiment # noqa: E402
+import argparse # noqa: E402
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--N", type=int, default=100, required=True, help='Number of FEM simulations to generate.')
-    parser.add_argument("--h", type=int, default=128, required=False, help='Mesh parameter for the 1D unit interval [0,1].')
+    parser.add_argument("--h", type=int, default=1024, required=False, help='Mesh parameter for the 1D unit interval [0,1].')
     parser.add_argument("--P", type=int, default=3, required=False, help='Depth of the random diffusion coefficient expansion.')
     parser.add_argument("--mu", type=int, default=1, required=False, help='Mean value of the random diffusion coefficient.')
     parser.add_argument("--std", type=int, default=5, required=False, help='Standard deviation of the random diffusion coefficent.')
@@ -35,29 +36,30 @@ def main():
     mu = user_inputs.mu
     std = user_inputs.std
 
-    # print("Beginning Experiment.")
-    # t_start = timetime()
     comm = dolfin_MPI.comm_world
-    # comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
 
     padded_indices, local_num_of_padding = get_per_rank_padded_indices(N=N, size=size, rank=rank)
 
-    model_params = {'P': P,
-                    'mu': mu,
-                    'mesh_num_of_steps': h,
-                    'std': std,
-                    'g_ineq_c': {'diffusion_field': 3}}
-    model_params['mesh_directory'] = f'data/mesh_data/diffusion_1d/h_{h}/interval_mesh.xdmf'
+    params = {'P': P,
+            'mu': mu,
+            'num_of_mesh_steps': h,
+            'std': std}
+    params['mesh_directory'] = f'data/mesh_data/diffusion_1d/h_{h}/interval_mesh.xdmf'
+    if not os_path.exists(params['mesh_directory']):
+        generate_1D_mesh(domain_interval=[0,1],
+                mesh_num_of_steps=h, 
+                mesh_save_dir=f'data/mesh_data/diffusion_1d/h_{h}', 
+                mesh_save_name='interval_mesh')
     #all workers need to have access to this
-    u_indexSuperset_oneHot = get_u_index_superset_onehot(dim_of_U=P, higher_order=False)
+    index_set_to_calculate = [idx for idx in generator_order_r_idcs_as_onehot(P-1, P)] + [idx for idx in generator_order_r_idcs_as_onehot(1, P)]
     if rank == 0:
         total_num_of_padding_pre = get_total_num_of_padding(N=N, size=size)
         if total_num_of_padding_pre > 0:
             print(f"!----------!----------!\nPadding needed for MPI!\n>{total_num_of_padding_pre}< extra simulations will be run.\n!----------!----------!")
 
-        parent_directory, parent_uid = make_directory(directory='data/experiment_data/diffusion_1d/hsic',
+        parent_directory, parent_uid = make_directory(directory='data/experiment_data/diffusion_1d/vecSob',
                                                     with_uid=True,
                                                     with_datetime=True, 
                                                     return_new_directory=True, 
@@ -67,10 +69,10 @@ def main():
         parent_uid = None
 
     parent_directory = comm.bcast(parent_directory, root=0)
-    parent_uid = comm.bcast(parent_uid, root=0) 
-
-    local_results = [(i, diffusion_1d_hsic_experiment(u_indexSuperset_oneHot=u_indexSuperset_oneHot,
-                            params=model_params,
+    parent_uid = comm.bcast(parent_uid, root=0)
+    
+    local_results = [(i, diffusion_1d_vecSob_experiment(index_set_to_calculate=index_set_to_calculate,
+                            params=params,
                             mpi_rank=rank, 
                             parent_directory=parent_directory)) for i in padded_indices]
     
@@ -84,24 +86,17 @@ def main():
             print(f'Assertion Warning! Predicted number of padded runs was {total_num_of_padding_pre}. Ran {total_num_of_padding_post} instead!')
 
         flat = [x for sub in all_results for x in sub]
-        # print(all_results)
         print("Done:", len(flat), "tasks")
         
         content_to_write_to_txt_dict = {'parent_uid': parent_uid,
                                         'total_num_of_experiments': int(N+total_num_of_padding_post),
                                         'total_num_of_padded_runs': int(total_num_of_padding_post),
-                                        'model_params': model_params}
+                                        'params': params}
         
         write_to_textfile(directory=parent_directory,
                         file_name='meta_data',
                         content_to_write_to_txt_dict=content_to_write_to_txt_dict)
 
-    # print("Experiment Done.")
-    # print(f"Execution time: {t_end - t_start:.6f} seconds")
-    # parser = argparse.ArgumentParser(description="...")
-    # parser.add_argument("--variable_name", default="default_value", help="tooltip-here")
-    # args = parser.parse_args()
-    # print(f"{args.variable_name}")
     comm.barrier()
     return 0
 

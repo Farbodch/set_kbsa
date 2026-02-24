@@ -55,24 +55,25 @@ def diffusion_1d_hsic_experiment(u_indexSuperset_oneHot,
         simul_t1 = timetime()
         simul_time_str = f"simulation_time(s):{simul_t1 - simul_t0:.6f}"
         
-        #store results to file
         #-----------------
-        #store input data
+        # store results to file
+        #-----------------
+        # store input data
         np_save(file=f"{local_path_idx_A}/input_data.npy", arr=u_input_idx_A)
-        #store output data
+        # store output data
         mesh = Mesh(fenics_comm)
         with XDMFFile(fenics_comm, mesh_directory) as xdmf:
             xdmf.read(mesh)
-            
         with XDMFFile(fenics_comm, f'{local_path_idx_A}/diffusion_field') as xdmf:
             xdmf.write_checkpoint(results, 'diffusion_field', 0, XDMFFile.Encoding.HDF5, append=False)
 
-        #store local_uid, core rank, index of input_A, u_input data (redundancy), simulation time of this 1 iteration
+        # store local_uid, core rank, index of input_A, u_input data (redundancy), simulation time of this 1 iteration
         content_to_write_to_txt_dict = {'local_uid': local_uid,
                                         'rank': mpi_rank,
                                         'idx_A': idx_A_str,
                                         'input_data': u_input_idx_A,
                                         'simulation_time': simul_time_str}
+        
         write_to_textfile(directory=local_path_idx_A, 
                         file_name='meta_data',
                         content_to_write_to_txt_dict=content_to_write_to_txt_dict,
