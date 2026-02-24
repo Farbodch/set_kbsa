@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --output=/dss/dsshome1/02/ge94nas3/projects/set_kbsa/slurm_out/vecSob_data/%x.%j.%N.out
-#SBATCH --error=/dss/dsshome1/02/ge94nas3/projects/set_kbsa/slurm_out/vecSob_data/%x.%j.%N.err
+#SBATCH --output=/dss/dsshome1/02/ge94nas3/projects/set_kbsa/slurm_out/hsic_data/%x.%j.%N.out
+#SBATCH --error=/dss/dsshome1/02/ge94nas3/projects/set_kbsa/slurm_out/hsic_data/%x.%j.%N.err
 #SBATCH --job-name="cdr_hsic_explicit_FEM_experiments"
 
 #SBATCH --time=08:00:00
