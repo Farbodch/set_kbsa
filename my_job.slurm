@@ -8,8 +8,8 @@
 #SBATCH --clusters=inter
 #SBATCH --partition=cm4_inter
 #SBATCH --nodes=1
-#SBATCH --ntasks=50
-#SBATCH --cpus-per-task=2
+#SBATCH --ntasks=25
+#SBATCH --cpus-per-task=4
 #SBATCH --export=NONE
 
 #SBATCH --mail-user=f.chamanian@tum.de

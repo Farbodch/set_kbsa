@@ -98,7 +98,7 @@ def main():
                                         # 'mesh_directory': f'/Users/farbodchamanian/Desktop/P--j-ct/code_repository/set_kbsa/data/mesh_data/diffusion_1d/h_{num_of_mesh_steps}/interval_mesh.xdmf',
                                         'u_domain_specifications': [{'distribution_type': 'uniform', 'min': -1, 'max': 1} for _ in range(P)],
                                         'u_one_hot_key_map': {key: f'P_{P-i}' for i, key in enumerate(generator_order_r_idcs_as_onehot(r=1, d=P))},
-                                        'test_domain': np_array([[0.4, 0.6]]),
+                                        'test_domain': np_array([[0.45, 0.55]]),
                                         'P': P,
                                         'g_constraint': 0.135,
                                         'field_of_interest': 'diffusion_field',
