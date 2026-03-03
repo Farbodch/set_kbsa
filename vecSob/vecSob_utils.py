@@ -185,22 +185,24 @@ def calculate_vecSob_index_A_looped(binary_system_output_data_index_A: NDArray):
     T = T
     return T_A/T
 
+# URGET TO DO -> TEST THIS FUNCTION!
 def build_sorted_output_data_dict(binary_system_output_data_dict: dict) -> dict:
     """
     Inputs: 
-        binary_system_output_data_dict: which has the data for u_I, u_II, 
-                                        and the one-hot-encoded indices (e.g., 00001, 00010, ...).
+        binary_system_output_data_dict: which has the data for u_I, 
+                                        and the dicts of one-hot-encoded indices (e.g., 00001, 00010, ...) 
+                                        where each dict has two keys u_II and u_tilde.
     Returns: 
         sorted_output_data_dict: {one_hot_index_key: NDArray of shape (3, n, num_of_grid_points)} where each
                dict[key].shape = (3, n, h) where [0,:,:] contains y_I, [1,:,:] contains y_II and [2,:,:] y_tilde. 
     """
     u_I = binary_system_output_data_dict['u_I']
-    u_II = binary_system_output_data_dict['u_II']
+    # u_II = binary_system_output_data_dict['u_II']
     sorted_output_data_dict = {}
-    for key, arr in binary_system_output_data_dict.items():
-        if key in ('u_I', 'u_II'):
+    for key, val_dict in binary_system_output_data_dict.items():
+        if key == 'u_I':
             continue
-        stacked = np_stack([u_I, u_II, arr], axis=0)   # (3, n, num_of_grid_points)
+        stacked = np_stack([u_I, val_dict['u_II'], val_dict['u_tilde']], axis=0)   # (3, n, num_of_grid_points)
         sorted_output_data_dict[key] = stacked
     return sorted_output_data_dict
 

@@ -91,9 +91,11 @@ def main():
                                 'get_total_sobols': True,
                                 'process_type': 'cdr_vecSob'},
     
-                        'diffusion_1d': {'data_directory': '/Users/farbodchamanian/Desktop/P--j-ct/code_repository/set_kbsa/data/experiment_data/diffusion_1d/vecSob',
+                        'diffusion_1d': {'data_directory': 'data/experiment_data/diffusion_1d/vecSob',
+                                        #  'data_directory': '/Users/farbodchamanian/Desktop/P--j-ct/code_repository/set_kbsa/data/experiment_data/diffusion_1d/vecSob',
                                         # 'data_directory': './data/experiment_data/diffusion_1d/vecSob',
-                                        'mesh_directory': f'/Users/farbodchamanian/Desktop/P--j-ct/code_repository/set_kbsa/data/mesh_data/diffusion_1d/h_{num_of_mesh_steps}/interval_mesh.xdmf',
+                                        'mesh_directory': f'data/mesh_data/diffusion_1d/h_{num_of_mesh_steps}/interval_mesh.xdmf',
+                                        # 'mesh_directory': f'/Users/farbodchamanian/Desktop/P--j-ct/code_repository/set_kbsa/data/mesh_data/diffusion_1d/h_{num_of_mesh_steps}/interval_mesh.xdmf',
                                         'u_domain_specifications': [{'distribution_type': 'uniform', 'min': -1, 'max': 1} for _ in range(P)],
                                         'u_one_hot_key_map': {key: f'P_{P-i}' for i, key in enumerate(generator_order_r_idcs_as_onehot(r=1, d=P))},
                                         'test_domain': np_array([[0.4, 0.6]]),
@@ -152,39 +154,66 @@ def main():
         # if shuffle_inputs:
         #     rnd_shuffle(field_data_dirs_list_bag)
         #create dictionary to bin/organize the directories 
-        data_file_dirs_dict = {'u_I': [], 'u_II': []}
+        # data_file_dirs_dict = {'u_I': [], 'u_II': []}
+        data_file_dirs_dict = {'u_I': []}
         # n_maxs_dict = {'u_I': 0, 'u_II': 0}
         for r in process_settings[process_model_name]['which_orders']:
             for A_str in generator_order_r_idcs_as_onehot(r=r, d=num_of_u_inputs):
-                data_file_dirs_dict[A_str] = []
+                # data_file_dirs_dict[A_str] = []
+                data_file_dirs_dict[A_str] = {'u_II': [], 'u_tilde': []}
                 # n_maxs_dict[A_str] = 0
         if (num_of_u_inputs-1) not in process_settings[process_model_name]['which_orders'] and \
         process_settings[process_model_name]['get_total_sobols']:
             for A_str in generator_order_r_idcs_as_onehot(r=(num_of_u_inputs-1), d=num_of_u_inputs):
-                data_file_dirs_dict[A_str] = []
+                # data_file_dirs_dict[A_str] = []
+                data_file_dirs_dict[A_str] = {'u_II': [], 'u_tilde': []}
                 # n_maxs_dict[A_str] = 0
         #bin/organize the directories into the dictionary
         for dir in field_data_dirs_list_bag:
             for key in data_file_dirs_dict.keys():
                 if f'{key}/' in dir:
-                    data_file_dirs_dict[key].append(dir)
+                    if key == 'u_I':
+                        data_file_dirs_dict[key].append(dir)
+                    elif 'u_II/' in dir:
+                        data_file_dirs_dict[key]['u_II'].append(dir)
+                    elif 'u_tilde/' in dir:
+                        data_file_dirs_dict[key]['u_tilde'].append(dir)
                     # n_maxs_dict[A_str] += 1
-        n_maxs_dict = {key: len(val) for key, val in data_file_dirs_dict.items()}
+        # n_maxs_dict = {key: len(val) for key, val in data_file_dirs_dict.items()}
+        n_maxs_dict = {}
+        for key, val in data_file_dirs_dict.items():
+            if key == 'u_I':
+                n_maxs_dict[key] = len(val)
+            else:
+                n_maxs_dict[key] = {}
+                for key_key, val_val in val.items():
+                    n_maxs_dict[key][key_key] = len(val_val)
         #find the largest number of data points that all A_str share, n_max_shared
         n_max_shared = n_maxs_dict['u_I']
         n_max_any = n_maxs_dict['u_I']
         for key in n_maxs_dict.keys():
-            if n_maxs_dict[key] < n_max_shared:
-                n_max_shared = n_maxs_dict[key]
-            if n_maxs_dict[key] > n_max_any:
-                n_max_any = n_maxs_dict[key]
+            if key == 'u_I':
+                continue
+            for key_key in n_maxs_dict[key].keys():
+                if n_maxs_dict[key][key_key] < n_max_shared:
+                    n_max_shared = n_maxs_dict[key][key_key]
+                if n_maxs_dict[key][key_key] > n_max_any:
+                    n_max_any = n_maxs_dict[key][key_key]
         #if the requested number of data points is less than n_max, then 
         if n < n_max_shared:
             for key in data_file_dirs_dict.keys():
-                data_file_dirs_dict[key] = data_file_dirs_dict[key][:n]
+                if key == 'u_I':
+                    data_file_dirs_dict[key] = data_file_dirs_dict[key][:n]
+                else:
+                    for key_key in data_file_dirs_dict[key].keys():
+                        data_file_dirs_dict[key][key_key] = data_file_dirs_dict[key][key_key][:n]
         elif n_max_shared != n_max_any:
             for key in data_file_dirs_dict.keys():
-                data_file_dirs_dict[key] = data_file_dirs_dict[key][:n_max_shared]
+                if key == 'u_I':
+                    data_file_dirs_dict[key] = data_file_dirs_dict[key][:n_max_shared]
+                else:
+                    for key_key in data_file_dirs_dict[key].keys():
+                        data_file_dirs_dict[key][key_key] = data_file_dirs_dict[key][key_key][:n_max_shared]
             n = n_max_shared
         else:
             n = n_max_shared
@@ -219,26 +248,48 @@ def main():
 
     else:
         binary_system_output_data_dict = {}
-        #loop through u_I, u_II, 00001, 00010, etc...
+        #loop through u_I, 00001 - u_II, u_tilde, 00010 - u_II, u_tilde, etc...
         for key in data_file_dirs_dict.keys():
-            binary_system_output_data_local = np_zeros((n, num_of_grid_points), dtype=uint8)
-            #here we distribute data read-in among available nodes.
-            for i in indices:
-                binary_system_output_data_local[i] = sample_fenics_function(data_directory=data_file_dirs_dict[key][i],
-                                                                            mesh=my_mesh,
-                                                                            func_space_V=V,
-                                                                            test_domain=process_settings[process_model_name]['test_domain'],
-                                                                            g_constraint=process_settings[process_model_name]['g_constraint'],
-                                                                            num_of_grid_points=num_of_grid_points)
-            local_results_curr_key = [(i, binary_system_output_data_local[i].copy()) for i in indices]
-            all_results_curr_key = comm.gather(local_results_curr_key, root=0)
-            comm.barrier()
-            if rank==0:
-                binary_system_output_data = np_zeros((n, num_of_grid_points), dtype=uint8)
-                for rank_list in all_results_curr_key:
-                    for i, results in rank_list:
-                        binary_system_output_data[i] = results
-                binary_system_output_data_dict[key] = binary_system_output_data
+            if key == 'u_I':
+                binary_system_output_data_local = np_zeros((n, num_of_grid_points), dtype=uint8)
+                #here we distribute data read-in among available nodes.
+                for i in indices:
+                    binary_system_output_data_local[i] = sample_fenics_function(data_directory=data_file_dirs_dict[key][i],
+                                                                                mesh=my_mesh,
+                                                                                func_space_V=V,
+                                                                                test_domain=process_settings[process_model_name]['test_domain'],
+                                                                                g_constraint=process_settings[process_model_name]['g_constraint'],
+                                                                                num_of_grid_points=num_of_grid_points)
+                local_results_curr_key = [(i, binary_system_output_data_local[i].copy()) for i in indices]
+                all_results_curr_key = comm.gather(local_results_curr_key, root=0)
+                comm.barrier()
+                if rank==0:
+                    binary_system_output_data = np_zeros((n, num_of_grid_points), dtype=uint8)
+                    for rank_list in all_results_curr_key:
+                        for i, results in rank_list:
+                            binary_system_output_data[i] = results
+                    binary_system_output_data_dict[key] = binary_system_output_data
+            else:
+                binary_system_output_data_dict[key] = {}
+                for key_key in data_file_dirs_dict[key].keys():
+                    binary_system_output_data_local = np_zeros((n, num_of_grid_points), dtype=uint8)
+                    #here we distribute data read-in among available nodes.
+                    for i in indices:
+                        binary_system_output_data_local[i] = sample_fenics_function(data_directory=data_file_dirs_dict[key][key_key][i],
+                                                                                    mesh=my_mesh,
+                                                                                    func_space_V=V,
+                                                                                    test_domain=process_settings[process_model_name]['test_domain'],
+                                                                                    g_constraint=process_settings[process_model_name]['g_constraint'],
+                                                                                    num_of_grid_points=num_of_grid_points)
+                    local_results_curr_key = [(i, binary_system_output_data_local[i].copy()) for i in indices]
+                    all_results_curr_key = comm.gather(local_results_curr_key, root=0)
+                    comm.barrier()
+                    if rank==0:
+                        binary_system_output_data = np_zeros((n, num_of_grid_points), dtype=uint8)
+                        for rank_list in all_results_curr_key:
+                            for i, results in rank_list:
+                                binary_system_output_data[i] = results
+                        binary_system_output_data_dict[key][key_key] = binary_system_output_data
         comm.barrier()
 
         if rank == 0:

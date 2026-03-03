@@ -281,15 +281,14 @@ def get_data_file_directories(base_dir: str,
                     if verbose:
                         print(f"Warning: {wanted_path} missing.")
             elif 'diffusion_1d' in process_type:
-                #NOTe: This sub_sub num of sub folders check is not static for vecSob, as it can have
-                # a varying number depending on whether the required orders were created (for total vs
-                # just the closed Sob indices). As such, a static folder cardinality check does not work here.
+                #CHECK LOGIC!
                 if 'vecSob' in process_type:
-                    if len(sub_subs) != 2*P+3:
+                    if len(sub_subs) != 4:
                         num_of_sub_folder_skips += 1
                         if verbose:
-                            print(f"Skipping {parent}/{sub}: does not have {P+1} sub_sub-folders.")
+                            print(f"Skipping {parent}/{sub}: does not have 4 sub_sub-folders.")
                         continue
+                #CHECK LOGIC!
                 else:
                     if len(sub_subs) != P+1:
                         num_of_sub_folder_skips += 1
@@ -297,14 +296,25 @@ def get_data_file_directories(base_dir: str,
                             print(f"Skipping {parent}/{sub}: does not have {P+1} sub_sub-folders.")
                         continue
 
-                #3)check inside each sub_sub_directory for exactly 4 files
+                #CHECK LOGIC!
                 for sub_sub in sub_subs:
-                    files = sorted([f for f in sub_sub.iterdir() if f.is_file()])
-                    if len(files) != 4:
-                        num_of_sub_sub_folder_skips += 1
-                        if verbose:
-                            print(f"Skipping {sub_sub}: does not contain the expected 4 files.")
+                    if Path(sub_sub).name == 'u_I':
+                        files = [f for f in sub_sub.iterdir() if f.is_file()]
+                        if len(files) != 4:
+                            num_of_sub_sub_folder_skips += 1
+                            if verbose:
+                                print(f"Skipping {sub_sub}: u_I file does not contain the expected 4 files.")
+                            continue
+                    elif (Path(sub_sub).name == 'u_II' or Path(sub_sub).name == 'u_tilde'):
+                        sub_sub_folders = sorted([d for d in sub_sub.iterdir() if d.is_dir()])
+                        if len(sub_sub_folders) != 2*P:
+                            num_of_sub_sub_folder_skips += 1
+                            if verbose:
+                                print(f"Skipping {sub_sub}: {Path(sub_sub).name} file does not contain the expected {2*P} files.")
+                            continue
+                    else:
                         continue
+
                     # elif len(files) != 2 and Path(sub_sub).name == 'u_III':
                     #     num_of_sub_sub_folder_skips += 1
                     #     if verbose:
@@ -312,16 +322,29 @@ def get_data_file_directories(base_dir: str,
                     #     continue
 
                     #4.a)collect chosen .h5 or .npy file
-                    wanted_path = sub_sub / target_filename
-                    if wanted_path.exists():
-                        if data_type == 'input_data':
-                            collected_paths.append(str(wanted_path))
+                    if Path(sub_sub).name == 'u_I':
+                        wanted_path = sub_sub / target_filename
+                        if wanted_path.exists():
+                            if data_type == 'input_data':
+                                collected_paths.append(str(wanted_path))
+                            else:
+                                collected_paths.append(str(wanted_path)[:-3])
                         else:
-                            collected_paths.append(str(wanted_path)[:-3])
-                    else:
-                        num_of_sub_sub_folder_skips += 1
-                        if verbose:
-                            print(f"Warning: {wanted_path} missing.")
+                            num_of_sub_sub_folder_skips += 1
+                            if verbose:
+                                print(f"Warning: {wanted_path} missing.")
+                    elif Path(sub_sub).name == 'u_II' or Path(sub_sub).name == 'u_tilde':
+                        for sub_sub_sub in sub_sub_folders:
+                            wanted_path = sub_sub_sub / target_filename
+                            if wanted_path.exists():
+                                if data_type == 'input_data':
+                                    collected_paths.append(str(wanted_path))
+                                else:
+                                    collected_paths.append(str(wanted_path)[:-3])
+                            else:
+                                num_of_sub_sub_folder_skips += 1
+                                if verbose:
+                                    print(f"Warning: {wanted_path} missing.")
         print(f"Num_of_parent_skips: {num_of_parent_skips}")
         print(f"num_of_sub_folder_skips: {num_of_sub_folder_skips}")
         print(f"num_of_sub_sub_folder_skips: {num_of_sub_sub_folder_skips}")

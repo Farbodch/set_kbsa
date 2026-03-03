@@ -286,18 +286,24 @@ def integrated_spatial_generalizedSob_parallelized(comm,
     del u_I_indicators
     gc.collect()
 
-    u_II_indicators = load_fenics_functions_as_indicator(comm=comm, 
-                                                        V=V, 
-                                                        data_dirs_to_eval_list=data_file_dirs_dict['u_II'], 
-                                                        g_constraint=g_constraint)
-    comm.Barrier()
-    u_A_keys = [k for k in data_file_dirs_dict.keys() if k not in ['u_I', 'u_II']]
+    # u_II_indicators = load_fenics_functions_as_indicator(comm=comm, 
+    #                                                     V=V, 
+    #                                                     data_dirs_to_eval_list=data_file_dirs_dict['u_II'], 
+    #                                                     g_constraint=g_constraint)
+    
+
+    u_A_keys = [k for k in data_file_dirs_dict.keys() if k not in ['u_I']]
     if not get_total_sobols:
         u_A_keys = [k for k in u_A_keys if direct_binstr_sum(k)==1]
     for u_A_key in u_A_keys:
+        u_II_indicators = load_fenics_functions_as_indicator(comm=comm, 
+                                                        V=V, 
+                                                        data_dirs_to_eval_list=data_file_dirs_dict[u_A_key]['u_II'], 
+                                                        g_constraint=g_constraint)
+        comm.Barrier()
         u_A_indicators = load_fenics_functions_as_indicator(comm=comm, 
                                                             V=V, 
-                                                            data_dirs_to_eval_list=data_file_dirs_dict[u_A_key], 
+                                                            data_dirs_to_eval_list=data_file_dirs_dict[u_A_key]['u_tilde'], 
                                                             g_constraint=g_constraint)
         comm.Barrier()
         sobol_val = integrated_spatial_cov_memory_mpi(
@@ -309,9 +315,8 @@ def integrated_spatial_generalizedSob_parallelized(comm,
             cov_results[u_A_key] = sobol_val
         del u_A_indicators
         gc.collect()
-    
-    del u_II_indicators
-    gc.collect()
+        del u_II_indicators
+        gc.collect()
     
     if rank == 0:
         vecSob_results_mapped = {}

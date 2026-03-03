@@ -112,60 +112,84 @@ def cdr_vecSob_experiment(index_set_to_calculate,
                                                 return_new_directory=True, 
                                                 return_uid=True)
 
-    u_A = generate_data('log_uniform', min_u=5.5e11, max_u=1.5e12, size=3)
-    u_E = generate_data('log_uniform', min_u=1.5e3, max_u=9.5e3, size=3)
-    u_T_i = generate_data('uniform', min_u=850, max_u=1000, size=3)
-    u_T_o = generate_data('uniform', min_u=200, max_u=400, size=3)
-    u_phi = generate_data('uniform', min_u=0.5, max_u=1.5, size=3)
-
-    u_all_realizations = np_arr([u_A, u_E, u_T_i, u_T_o, u_phi])
-    u_I = u_all_realizations[:, 0]
-    u_II = u_all_realizations[:, 1]
-    u_III = u_all_realizations[:, 2] 
+    #-----------------------------------
+    # sample u_I, get model result of y(u_I) and save to file
+    #-----------------------------------
+    u_A = generate_data('log_uniform', min_u=5.5e11, max_u=1.5e12, size=1)
+    u_E = generate_data('log_uniform', min_u=1.5e3, max_u=9.5e3, size=1)
+    u_T_i = generate_data('uniform', min_u=850, max_u=1000, size=1)
+    u_T_o = generate_data('uniform', min_u=200, max_u=400, size=1)
+    u_phi = generate_data('uniform', min_u=0.5, max_u=1.5, size=1)
+    u_I = np_arr([u_A, u_E, u_T_i, u_T_o, u_phi])
     mesh_directory = params["mesh_directory"]
     _run_experiment(params = params, 
-                    u_input_idx_A=u_I, 
+                    u_input_idx_A=u_I[:, 0], 
                     mesh_directory=mesh_directory, 
                     fenics_comm=fenics_comm, 
                     mpi_rank=mpi_rank, 
                     local_path_idx_A=f"{local_directory}/u_I", 
                     local_uid=local_uid, 
                     idx_A_str='I')
-    _run_experiment(params = params, 
-                    u_input_idx_A=u_II, 
-                    mesh_directory=mesh_directory, 
-                    fenics_comm=fenics_comm, 
-                    mpi_rank=mpi_rank, 
-                    local_path_idx_A=f"{local_directory}/u_II", 
-                    local_uid=local_uid, 
-                    idx_A_str='II')
-    u_III_directory = f"{local_directory}/u_III"
-    make_directory(directory=u_III_directory,
-                with_uid=False,
-                with_datetime=False,
-                return_new_directory=False,
-                return_uid=False)
-    np_save(file=f"{u_III_directory}/input_data.npy", arr=u_III)
-    content_to_write_to_txt_dict = {'local_uid': local_uid,
-                                    'rank': mpi_rank,
-                                    'idx_A': "III",
-                                    'input_data': u_III,
-                                    'simulation_time': '0.0'}
-    write_to_textfile(directory=u_III_directory, 
-                    file_name='meta_data',
-                    content_to_write_to_txt_dict=content_to_write_to_txt_dict,
-                    include_current_datetime=True)
+
     """
     NOW -> Based on maybe an index_set_to_calculate -> combine different A from U_[0] and A^C from U_[2] -> run and save
     To Do -> Just need to implement a combinating-mechanism based on A \in index_set_to_calculate as we loop through index_set_to_calculate
     """
     for _, idx_A_str in enumerate(index_set_to_calculate):
+        #-----------------------------------
+        # sample u_II and u_III
+        #-----------------------------------
+        u_A = generate_data('log_uniform', min_u=5.5e11, max_u=1.5e12, size=2)
+        u_E = generate_data('log_uniform', min_u=1.5e3, max_u=9.5e3, size=2)
+        u_T_i = generate_data('uniform', min_u=850, max_u=1000, size=2)
+        u_T_o = generate_data('uniform', min_u=200, max_u=400, size=2)
+        u_phi = generate_data('uniform', min_u=0.5, max_u=1.5, size=2)
+        u_all = np_arr([u_A, u_E, u_T_i, u_T_o, u_phi])
+
+        #-----------------------------------
+        # get model result of y(u_II) and save to file
+        #-----------------------------------
+        u_II = u_all[:, 0]
+        _run_experiment(params = params, 
+                u_input_idx_A=u_II, 
+                mesh_directory=mesh_directory, 
+                fenics_comm=fenics_comm, 
+                mpi_rank=mpi_rank, 
+                local_path_idx_A=f"{local_directory}/u_II/{idx_A_str}", 
+                local_uid=local_uid, 
+                idx_A_str='II')
+
+        #-----------------------------------
+        # save the u_III values to file
+        #-----------------------------------
+        u_III = u_all[:, 1]
+        u_III_directory = f"{local_directory}/u_III/{idx_A_str}"
+        make_directory(directory=u_III_directory,
+                    with_uid=False,
+                    with_datetime=False,
+                    return_new_directory=False,
+                    return_uid=False)
+        np_save(file=f"{u_III_directory}/input_data.npy", arr=u_III)
+        content_to_write_to_txt_dict = {'local_uid': local_uid,
+                                        'rank': mpi_rank,
+                                        'idx_A': "III",
+                                        'input_data': u_III,
+                                        'simulation_time': '0.0'}
+        write_to_textfile(directory=u_III_directory, 
+                        file_name='meta_data',
+                        content_to_write_to_txt_dict=content_to_write_to_txt_dict,
+                        include_current_datetime=True)
+        
+        #-----------------------------------
+        # combine inputs from u_II and u_III into u_tilde = (u_II_A, u_III_{A^c})
+        # get model result of y(u_tilde) and save to file
+        #-----------------------------------
         u_tilde = np_where(np_arr(list(idx_A_str), dtype=int8) == 1, u_II, u_III)
         _run_experiment(params = params, 
                     u_input_idx_A=u_tilde, 
                     mesh_directory=mesh_directory, 
                     fenics_comm=fenics_comm, 
                     mpi_rank=mpi_rank, 
-                    local_path_idx_A=f"{local_directory}/{idx_A_str}", 
+                    local_path_idx_A=f"{local_directory}/u_tilde/{idx_A_str}", 
                     local_uid=local_uid, 
                     idx_A_str=idx_A_str)
