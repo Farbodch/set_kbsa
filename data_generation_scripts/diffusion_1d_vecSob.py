@@ -147,7 +147,7 @@ def diffusion_1d_vecSob_experiment(index_set_to_calculate,
         # sample u_III, and save the u_III values to file
         #-----------------------------------
         u_III = np_arr([generate_data('uniform', min_u=-1, max_u=1, size=1) for _ in range(depth_P)])
-        u_III_directory = f"{local_directory}/u_III"
+        u_III_directory = f"{local_directory}/u_III/{idx_A_str}"
         make_directory(directory=u_III_directory,
                     with_uid=False,
                     with_datetime=False,
@@ -156,7 +156,7 @@ def diffusion_1d_vecSob_experiment(index_set_to_calculate,
         np_save(file=f"{u_III_directory}/input_data.npy", arr=u_III[:, 0])
         content_to_write_to_txt_dict = {'local_uid': local_uid,
                                         'rank': mpi_rank,
-                                        'idx_A': "III",
+                                        'idx_A': f"III_{idx_A_str}",
                                         'input_data': u_III[:, 0],
                                         'simulation_time': '0.0'}
         write_to_textfile(directory=u_III_directory, 
@@ -174,6 +174,6 @@ def diffusion_1d_vecSob_experiment(index_set_to_calculate,
                     mesh_directory=mesh_directory, 
                     fenics_comm=fenics_comm, 
                     mpi_rank=mpi_rank, 
-                    local_path_idx_A=f"{local_directory}/{idx_A_str}", 
+                    local_path_idx_A=f"{local_directory}/u_tilde/{idx_A_str}", 
                     local_uid=local_uid, 
                     idx_A_str=idx_A_str)
