@@ -108,53 +108,67 @@ def diffusion_1d_vecSob_experiment(index_set_to_calculate,
                                                 return_new_directory=True, 
                                                 return_uid=True)
     depth_P = params["P"]
-    # choosing range(depth_P) for individual indices for each randomized-input 
-    # (P_1 ...01, P_2 ...10, P_3 ...100, etc.) 
-    # and size=3 for the three input-data-sets required for the pick-freeze algorithm
-    # u_P = generate_data('uniform', min_u=-1, max_u=1, size=3)
-    u_all_realizations = np_arr([generate_data('uniform', min_u=-1, max_u=1, size=3) for _ in range(depth_P)])
-    u_I = u_all_realizations[:, 0]
-    u_II = u_all_realizations[:, 1]
-    u_III = u_all_realizations[:, 2]
     mesh_directory = params["mesh_directory"]
+
+    #-----------------------------------
+    # sample u_I, get model result of y(u_I) and save to file
+    #-----------------------------------
+    # choosing range(depth_P) for individual indices for each randomized-input 
+    # (P_1 ...01, P_2 ...10, P_3 ...100, etc.)
+    u_I = np_arr([generate_data('uniform', min_u=-1, max_u=1, size=1) for _ in range(depth_P)])
     _run_experiment(params = params, 
-                    u_input_idx_A=u_I, 
+                    u_input_idx_A=u_I[:, 0], 
                     mesh_directory=mesh_directory, 
                     fenics_comm=fenics_comm, 
                     mpi_rank=mpi_rank, 
                     local_path_idx_A=f"{local_directory}/u_I", 
                     local_uid=local_uid, 
                     idx_A_str='I')
-    _run_experiment(params = params, 
-                    u_input_idx_A=u_II, 
-                    mesh_directory=mesh_directory, 
-                    fenics_comm=fenics_comm, 
-                    mpi_rank=mpi_rank, 
-                    local_path_idx_A=f"{local_directory}/u_II", 
-                    local_uid=local_uid, 
-                    idx_A_str='II')
-    u_III_directory = f"{local_directory}/u_III"
-    make_directory(directory=u_III_directory,
-                with_uid=False,
-                with_datetime=False,
-                return_new_directory=False,
-                return_uid=False)
-    np_save(file=f"{u_III_directory}/input_data.npy", arr=u_III)
-    content_to_write_to_txt_dict = {'local_uid': local_uid,
-                                    'rank': mpi_rank,
-                                    'idx_A': "III",
-                                    'input_data': u_III,
-                                    'simulation_time': '0.0'}
-    write_to_textfile(directory=u_III_directory, 
-                    file_name='meta_data',
-                    content_to_write_to_txt_dict=content_to_write_to_txt_dict,
-                    include_current_datetime=True)
+     
     """
     NOW -> Based on maybe an index_set_to_calculate -> combine different A from U_[0] and A^C from U_[2] -> run and save
     To Do -> Just need to implement a combinating-mechanism based on A \in index_set_to_calculate as we loop through index_set_to_calculate
     """
     for _, idx_A_str in enumerate(index_set_to_calculate):
-        u_tilde = np_where(np_arr(list(idx_A_str), dtype=int8) == 1, u_II, u_III)
+        #-----------------------------------
+        # sample u_II, get model result of y(u_II) and save to file
+        #-----------------------------------
+        u_II = np_arr([generate_data('uniform', min_u=-1, max_u=1, size=1) for _ in range(depth_P)])
+        _run_experiment(params = params, 
+                    u_input_idx_A=u_II[:, 0], 
+                    mesh_directory=mesh_directory, 
+                    fenics_comm=fenics_comm, 
+                    mpi_rank=mpi_rank, 
+                    local_path_idx_A=f"{local_directory}/u_II/{idx_A_str}", 
+                    local_uid=local_uid, 
+                    idx_A_str='II')
+        
+        #-----------------------------------
+        # sample u_III, and save the u_III values to file
+        #-----------------------------------
+        u_III = np_arr([generate_data('uniform', min_u=-1, max_u=1, size=1) for _ in range(depth_P)])
+        u_III_directory = f"{local_directory}/u_III"
+        make_directory(directory=u_III_directory,
+                    with_uid=False,
+                    with_datetime=False,
+                    return_new_directory=False,
+                    return_uid=False)
+        np_save(file=f"{u_III_directory}/input_data.npy", arr=u_III[:, 0])
+        content_to_write_to_txt_dict = {'local_uid': local_uid,
+                                        'rank': mpi_rank,
+                                        'idx_A': "III",
+                                        'input_data': u_III[:, 0],
+                                        'simulation_time': '0.0'}
+        write_to_textfile(directory=u_III_directory, 
+                        file_name='meta_data',
+                        content_to_write_to_txt_dict=content_to_write_to_txt_dict,
+                        include_current_datetime=True)
+
+        #-----------------------------------
+        # combine inputs from u_II and u_III into u_tilde = (u_II_A, u_III_{A^c})
+        # get model result of y(u_tilde) and save to file
+        #-----------------------------------
+        u_tilde = np_where(np_arr(list(idx_A_str), dtype=int8) == 1, u_II[:, 0], u_III[:, 0])
         _run_experiment(params = params, 
                     u_input_idx_A=u_tilde, 
                     mesh_directory=mesh_directory, 
