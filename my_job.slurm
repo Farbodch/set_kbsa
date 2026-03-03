@@ -22,8 +22,24 @@ module load mpi
 source /dss/lrzsys/sys/spack/release/24.4.0/opt/x86_64/miniconda3/24.7.1-gcc-t6x7erm/etc/profile.d/conda.sh
 conda activate set_kbsa
 
-# mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_cdr_vecSob_experiments.py --N 4000
-# mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_vecSob.py
+#-Data Generation
+#   |
+#   |---------cdr
+#   |   |-----vecSob:
+#           mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_cdr_vecSob_experiments.py --N 5000             
+#   |   |-----hsic:
+#           mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_cdr_hsic_experiments.py --N 5000
+#   |---------diffusion_1d:
+#   |   |-----vecSob:
+#           mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_1d_diffusion_vecSob_experiments.py --N 5000
+#   |   |-----hsic:
+#           mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_1d_diffusion_hsic_experiments.py --N 5000
+#-----------------
 
-# mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_cdr_experiments.py --N 5000
-mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run/run_parallel_hsic.py --N 10000
+#-Calculate Sensitivity Indicies
+#   |
+#   |---------vecSob:
+#       # mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_vecSob.py --N 1000 --M 1024 --H 1024 --S 0
+#   |---------hsic:
+#       # mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run/run_parallel_hsic.py --N 10000
+# -------------------------------
