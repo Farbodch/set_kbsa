@@ -31,7 +31,7 @@ conda activate set_kbsa
             # mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run/data_generation/run_parallel_cdr_hsic_experiments.py --N 5000
 #   |---------diffusion_1d:
 #   |   |-----vecSob:
-          mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run/data_generation/run_parallel_1d_diffusion_vecSob_experiments.py --N 10000
+        #   mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run/data_generation/run_parallel_1d_diffusion_vecSob_experiments.py --N 10000
 #   |   |-----hsic:
             # mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run/data_generation/run_parallel_1d_diffusion_hsic_experiments.py --N 5000
 #-----------------
@@ -39,7 +39,7 @@ conda activate set_kbsa
 #-Calculate Sensitivity Indicies
 #   |
 #   |---------vecSob:
-        # mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run/run_parallel_vecSob.py --N 1000 --M 1024 --H 1024 --S 0
+        mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run/run_parallel_vecSob.py --N 1000 --M 1024 --H 1024 --S 0
 #   |---------hsic:
         # mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run/run_parallel_hsic.py --N 10000
 # -------------------------------
