@@ -31,7 +31,7 @@ conda activate set_kbsa
 #           mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_cdr_hsic_experiments.py --N 5000
 #   |---------diffusion_1d:
 #   |   |-----vecSob:
-#           mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_1d_diffusion_vecSob_experiments.py --N 5000
+          mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_1d_diffusion_vecSob_experiments.py --N 10000
 #   |   |-----hsic:
 #           mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run_parallel_1d_diffusion_hsic_experiments.py --N 5000
 #-----------------
