@@ -233,40 +233,90 @@ def get_data_file_directories(base_dir: str,
             sub_subs = sorted([d for d in sub.iterdir() if d.is_dir()])
 
             if 'cdr' in process_type:
-                #NOTe: This sub_sub num of sub folders check is not static for vecSob, as it can have
-                # a varying number depending on whether the required orders were created (for total vs
-                # just the closed Sob indices). As such, a static folder cardinality check does not work here.
-                if len(sub_subs) != 6 and process_type == 'cdr':
-                    num_of_sub_folder_skips += 1
-                    if verbose:
-                        print(f"Skipping {parent}/{sub}: does not have 6 sub_sub-folders.")
-                    continue
-
-                #3)check inside each sub_sub_directory for exactly 10 files
-                for sub_sub in sub_subs:
-                    files = sorted([f for f in sub_sub.iterdir() if f.is_file()])
-                    if len(files) != 10 and Path(sub_sub).name != 'u_III':
-                        num_of_sub_sub_folder_skips += 1
+                if 'vecSob' in process_type:
+                    if len(sub_subs) != 4:
+                        num_of_sub_folder_skips += 1
                         if verbose:
-                            print(f"Skipping {parent}/{sub}/{sub_sub}: does not contain the expected 10 files.")
+                            print(f"Skipping {parent}/{sub}: does not have 4 sub_sub-folders.")
                         continue
-                    elif len(files) != 2 and Path(sub_sub).name == 'u_III':
-                        num_of_sub_sub_folder_skips += 1
-                        if verbose:
-                            print(f"Skipping {parent}/{sub}/{sub_sub}: does not contain the expected 2 files.")
-                        continue
-
-                    #4.a)collect chosen .h5 or .npy file
-                    wanted_path = sub_sub / target_filename
-                    if wanted_path.exists():
-                        if data_type == 'input_data':
-                            collected_paths.append(str(wanted_path))
+                    
+                    for sub_sub in sub_subs:
+                        if Path(sub_sub).name == 'u_I':
+                            files = [f for f in sub_sub.iterdir() if f.is_file()]
+                            if len(files) != 10:
+                                num_of_sub_sub_folder_skips += 1
+                                if verbose:
+                                    print(f"Skipping {sub_sub}: u_I file does not contain the expected 4 files.")
+                                continue
+                        elif (Path(sub_sub).name == 'u_II' or Path(sub_sub).name == 'u_tilde'):
+                            sub_sub_folders = sorted([d for d in sub_sub.iterdir() if d.is_dir()])
+                            if len(sub_sub_folders) != 10:
+                                num_of_sub_sub_folder_skips += 1
+                                if verbose:
+                                    print(f"Skipping {sub_sub}: {Path(sub_sub).name} file does not contain the expected {2*P} files.")
+                                continue
                         else:
-                            collected_paths.append(str(wanted_path)[:-3])
-                    else:
-                        num_of_sub_sub_folder_skips += 1
+                            continue
+
+                        #4.a)collect chosen .h5 or .npy file
+                        if Path(sub_sub).name == 'u_I':
+                            wanted_path = sub_sub / target_filename
+                            if wanted_path.exists():
+                                if data_type == 'input_data':
+                                    collected_paths.append(str(wanted_path))
+                                else:
+                                    collected_paths.append(str(wanted_path)[:-3])
+                            else:
+                                num_of_sub_sub_folder_skips += 1
+                                if verbose:
+                                    print(f"Warning: {wanted_path} missing.")
+                        elif Path(sub_sub).name == 'u_II' or Path(sub_sub).name == 'u_tilde':
+                            for sub_sub_sub in sub_sub_folders:
+                                wanted_path = sub_sub_sub / target_filename
+                                if wanted_path.exists():
+                                    if data_type == 'input_data':
+                                        collected_paths.append(str(wanted_path))
+                                    else:
+                                        collected_paths.append(str(wanted_path)[:-3])
+                                else:
+                                    num_of_sub_sub_folder_skips += 1
+                                    if verbose:
+                                        print(f"Warning: {wanted_path} missing.")
+                else:
+                    #NOTe: This sub_sub num of sub folders check is not static for vecSob, as it can have
+                    # a varying number depending on whether the required orders were created (for total vs
+                    # just the closed Sob indices). As such, a static folder cardinality check does not work here.
+                    if len(sub_subs) != 6 and process_type == 'cdr':
+                        num_of_sub_folder_skips += 1
                         if verbose:
-                            print(f"Warning: {wanted_path} missing.")
+                            print(f"Skipping {parent}/{sub}: does not have 6 sub_sub-folders.")
+                        continue
+
+                    #3)check inside each sub_sub_directory for exactly 10 files
+                    for sub_sub in sub_subs:
+                        files = sorted([f for f in sub_sub.iterdir() if f.is_file()])
+                        if len(files) != 10 and Path(sub_sub).name != 'u_III':
+                            num_of_sub_sub_folder_skips += 1
+                            if verbose:
+                                print(f"Skipping {parent}/{sub}/{sub_sub}: does not contain the expected 10 files.")
+                            continue
+                        elif len(files) != 2 and Path(sub_sub).name == 'u_III':
+                            num_of_sub_sub_folder_skips += 1
+                            if verbose:
+                                print(f"Skipping {parent}/{sub}/{sub_sub}: does not contain the expected 2 files.")
+                            continue
+
+                        #4.a)collect chosen .h5 or .npy file
+                        wanted_path = sub_sub / target_filename
+                        if wanted_path.exists():
+                            if data_type == 'input_data':
+                                collected_paths.append(str(wanted_path))
+                            else:
+                                collected_paths.append(str(wanted_path)[:-3])
+                        else:
+                            num_of_sub_sub_folder_skips += 1
+                            if verbose:
+                                print(f"Warning: {wanted_path} missing.")
 
             elif process_type == 'analytical':
                 #4.b)collect chosen .h5 or .npy file
