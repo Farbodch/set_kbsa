@@ -69,10 +69,13 @@ def main():
     size = comm.Get_size()
 
     process_model_names = ['2d_cdr', 'diffusion_1d']
-    process_model_name = process_model_names[1]
+    process_model_name = process_model_names[0]
     
     if rank == 0:
-        print(6*'-',f'Starting run on model: {process_model_name} | with n = {n} | mesh_steps = {num_of_mesh_steps} | explicit_FEM = {compute_explicit_FEM}',6*'-')
+        if process_model_name == 'diffusion_1d':
+            print(6*'-',f'Starting run on model: {process_model_name} | with n = {n} | mesh_steps = {num_of_mesh_steps} | explicit_FEM = {compute_explicit_FEM}',6*'-')
+        else:
+            print(6*'-',f'Starting run on model: {process_model_name} | with n = {n} | explicit_FEM = {compute_explicit_FEM}',6*'-')
 
     P=3
     valid_cdr_fields = ['fuel_field', 'oxygen_field', 'product_field', 'temp_field']
@@ -317,7 +320,8 @@ def main():
                 else:
                     f.write('compute_method:statistical;')
                     f.write(f'\nnum_of_grid_points:{num_of_grid_points};')
-                f.write(f'\nmesh_num_of_steps:{num_of_mesh_steps};')
+                if process_model_name == 'diffusion_1d':
+                    f.write(f'\nmesh_num_of_steps:{num_of_mesh_steps};')
         vecSob_results_mapped_string = f'{vecSob_results_mapped}'.replace('),', ',').replace('np.float64(','').replace(')}','}')
         with open(f"{parent_folder}/results.txt", 'w') as f:
             f.write(vecSob_results_mapped_string)
