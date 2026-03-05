@@ -149,7 +149,7 @@ def main():
         data_files_dirs_list_bag = get_data_file_directories(base_dir=process_settings[process_model_name]['data_directory'], 
                                                     data_type='input_data',
                                                     process_type=process_settings[process_model_name]['process_type'],
-                                                    verbose=False,
+                                                    verbose=True,
                                                     enforce_params=False,
                                                     num_of_mesh_steps=num_of_mesh_steps)
         #adjust target file names to the fenics function field of interest

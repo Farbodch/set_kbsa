@@ -39,7 +39,7 @@ conda activate set_kbsa
 #-Calculate Sensitivity Indicies
 #   |
 #   |---------vecSob:
-        mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run/run_parallel_vecSob.py --N 4000 --M 1024 --H 1024 --S 0
+        mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run/run_parallel_vecSob.py --N 1000 --M 1024 --H 1024 --S 0
 #   |---------hsic:
         # mpiexec -n $SLURM_NTASKS python /dss/dsshome1/02/ge94nas3/projects/set_kbsa/run/run_parallel_hsic.py --N 10000
 # -------------------------------
