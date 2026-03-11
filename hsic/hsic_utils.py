@@ -345,7 +345,7 @@ def compute_integrated_gamma_matrix_mpi(comm,
     gathered_results_arr = comm.gather(local_results_arr, root=0)
 
     if rank == 0 and not restart:
-        lambda_matrix = np_zeros((N, N), dtype=float64)
+        gamma_matrix = np_zeros((N, N), dtype=float64)
 
         all_i_indices = np_concatenate(gathered_i_indices_arr)
         all_j_indices = np_concatenate(gathered_j_indices_arr)
@@ -355,15 +355,16 @@ def compute_integrated_gamma_matrix_mpi(comm,
         assert len(all_i_indices) == len(all_results)
 
         #fill upper-triangle of matrix
-        lambda_matrix[all_i_indices, all_j_indices] = all_results
+        gamma_matrix[all_i_indices, all_j_indices] = all_results
         #fill lower-triangle of matrix, enforce symmetry
-        lambda_matrix[all_j_indices, all_i_indices] = all_results
+        gamma_matrix[all_j_indices, all_i_indices] = all_results
 
-        #redundancy for safety
-        lambda_matrix = np_fill_diagonal(lambda_matrix, 0.0)
+        print(f"Rank {rank}: Type={type(gamma_matrix)}, Shape={getattr(gamma_matrix, 'shape', 'NoShape')}")
 
-        sigma_squared = np_mean(lambda_matrix)
-        gamma_matrix = np_exp(-1.0 * lambda_matrix / (2 * sigma_squared))
+        sigma_squared = np_mean(gamma_matrix)
+        scaling_factor = -1.0 / (2.0 * sigma_squared)
+        gamma_matrix *= scaling_factor
+        np_exp(gamma_matrix, out=gamma_matrix)
         return gamma_matrix
     else:
         return np_empty((0, 0))
