@@ -35,6 +35,7 @@ from numpy import (int32, float64, float32, uint8, fill_diagonal,
                 logical_xor as np_logical_xor,
                 bitwise_xor as np_bitwise_xor,
                 dot as np_dot,
+                fill_diagonal as np_fill_diagonal,
                 concatenate as np_concatenate,
                 array_split as np_array_split)
 from numpy.random import (uniform as np_unif)
@@ -344,7 +345,7 @@ def compute_integrated_gamma_matrix_mpi(comm,
     gathered_results_arr = comm.gather(local_results_arr, root=0)
 
     if rank == 0 and not restart:
-        gamma_matrix = np_zeros((N, N), dtype=float64)
+        lambda_matrix = np_zeros((N, N), dtype=float64)
 
         all_i_indices = np_concatenate(gathered_i_indices_arr)
         all_j_indices = np_concatenate(gathered_j_indices_arr)
@@ -354,10 +355,15 @@ def compute_integrated_gamma_matrix_mpi(comm,
         assert len(all_i_indices) == len(all_results)
 
         #fill upper-triangle of matrix
-        gamma_matrix[all_i_indices, all_j_indices] = all_results
+        lambda_matrix[all_i_indices, all_j_indices] = all_results
         #fill lower-triangle of matrix, enforce symmetry
-        gamma_matrix[all_j_indices, all_i_indices] = all_results
+        lambda_matrix[all_j_indices, all_i_indices] = all_results
 
+        #redundancy for safety
+        lambda_matrix = np_fill_diagonal(lambda_matrix, 0.0)
+
+        sigma_squared = np_mean(lambda_matrix)
+        gamma_matrix = np_exp(-1.0 * lambda_matrix / (2 * sigma_squared))
         return gamma_matrix
     else:
         return np_empty((0, 0))
@@ -388,7 +394,7 @@ def assemble_gamma_matrix_from_checkpoints(comm,
         return None
     
     tmp_checkpoint_dir = Path(tmp_checkpoint_dir)
-    gamma_matrix = np_zeros((n, n), dtype=float64)
+    lambda_matrix = np_zeros((n, n), dtype=float64)
     checkpoints_paths_list_found_flag = False
 
     if rank == 0:    
@@ -409,13 +415,17 @@ def assemble_gamma_matrix_from_checkpoints(comm,
                 row_idx = int(cp_path.stem.split('_')[1])
                 row_data = np_load(cp_path)
                 #fill upper-triangle of matrix
-                gamma_matrix[row_idx, :] += row_data
+                lambda_matrix[row_idx, :] += row_data
                 #fill lower-triangle of matrix, enforce symmetry
-                gamma_matrix[:, row_idx] += row_data
+                lambda_matrix[:, row_idx] += row_data
             except (ValueError, IndexError) as e:
                 print(f"Warning: Could not parse file {cp_path}. Error: {e}")
                 continue
-    
+        #redundancy for safety
+        lambda_matrix = np_fill_diagonal(lambda_matrix, 0.0)
+
+        sigma_squared = np_mean(lambda_matrix)
+        gamma_matrix = np_exp(-1.0 * lambda_matrix / (2 * sigma_squared))
     if share_with_all_MPI_ranks:
         comm.Bcast(gamma_matrix, root=0)
     
@@ -505,11 +515,17 @@ def load_data_and_calculate_symmetric_difference_mpi_worker(comm,
         assert len(all_i_indices) == len(all_j_indices)
         assert len(all_i_indices) == len(all_results)
 
-        gamma_matrix = np_zeros((N, N), dtype=float64)
+        lambda_matrix = np_zeros((N, N), dtype=float64)
         #fill upper-triangle of matrix
-        gamma_matrix[all_i_indices, all_j_indices] = all_results
+        lambda_matrix[all_i_indices, all_j_indices] = all_results
         #fill lower-triangle of matrix, enforce symmetry
-        gamma_matrix[all_j_indices, all_i_indices] = all_results
+        lambda_matrix[all_j_indices, all_i_indices] = all_results
+
+        #redundancy for safety
+        lambda_matrix = np_fill_diagonal(lambda_matrix, 0.0)
+
+        sigma_squared = np_mean(lambda_matrix)
+        gamma_matrix = np_exp(-1.0 * lambda_matrix / (2 * sigma_squared))
 
         return gamma_matrix
     else:
